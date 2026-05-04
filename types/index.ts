@@ -82,6 +82,19 @@ export interface PurchaseOrderItem {
   lineTotal: number;
 }
 
+export interface CreatePurchaseOrderItemRequest {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface CreatePurchaseOrderRequest {
+  orderNumber: string;
+  supplierId: string;
+  branchId: string;
+  items: CreatePurchaseOrderItemRequest[];
+}
+
 export interface PurchaseOrder {
   id: string;
   orderNumber: string;

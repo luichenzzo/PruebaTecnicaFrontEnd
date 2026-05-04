@@ -35,6 +35,7 @@ export default function CreateSalePage() {
   
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [branchId, setBranchId] = useState<string>("");
+  const [discountPercentage, setDiscountPercentage] = useState<number>(0);
 
   useEffect(() => {
     // Determine the branch to operate in
@@ -161,14 +162,19 @@ export default function CreateSalePage() {
     setCart(prev => prev.filter(item => item.product.id !== productId));
   };
 
-  // Calculations
   const subtotal = cart.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
-  const total = subtotal; // Add tax/discount logic here if needed
+  const discountAmount = subtotal * ((discountPercentage || 0) / 100);
+  const total = subtotal - discountAmount;
 
   // Validate cart before opening modal
   const handleReviewSale = () => {
     if (cart.length === 0) {
       toast({ type: "warning", title: "Cart is empty" });
+      return;
+    }
+
+    if (discountPercentage < 0 || discountPercentage > 100) {
+      toast({ type: "error", title: "Invalid discount", message: "Discount must be between 0 and 100." });
       return;
     }
 
@@ -182,20 +188,33 @@ export default function CreateSalePage() {
   };
 
   const generateSaleNumber = async () => {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}`;
+    const prefix = `SALE-${dateStr}`;
+
     try {
       const sales = await apiClient<Sale[]>("/api/sales");
       let maxNum = 0;
+      let count = 0;
+      
       sales.forEach(s => {
-        const match = s.saleNumber.match(/SALE-(\d+)/);
-        if (match && match[1]) {
-          const num = parseInt(match[1], 10);
-          if (num > maxNum) maxNum = num;
+        count++;
+        const parts = s.saleNumber.split('-');
+        // Check if it has a 3rd part (the suffix)
+        if (parts.length >= 3) {
+          const num = parseInt(parts[parts.length - 1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
         }
       });
-      return `SALE-${String(maxNum + 1).padStart(3, '0')}`;
+
+      // If we found previous suffixes, increment the max. Otherwise, fallback to total count + 1
+      const nextSequence = maxNum > 0 ? maxNum + 1 : count + 1;
+      return `${prefix}-${String(nextSequence).padStart(3, '0')}`;
     } catch {
       // Fallback
-      return `SALE-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
+      return `${prefix}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
     }
   };
 
@@ -216,13 +235,16 @@ export default function CreateSalePage() {
       const saleNumber = await generateSaleNumber();
 
       // Step 3: Build payload
+      // Apply the global discount percentage evenly to each item's unitPrice
+      const discountMultiplier = 1 - ((discountPercentage || 0) / 100);
+      
       const payload: CreateSaleRequest = {
         saleNumber,
         branchId,
         items: cart.map(item => ({
           productId: item.product.id,
           quantity: item.quantity,
-          unitPrice: item.unitPrice
+          unitPrice: Number((item.unitPrice * discountMultiplier).toFixed(2))
         }))
       };
 
@@ -235,6 +257,7 @@ export default function CreateSalePage() {
       toast({ type: "success", title: "Sale completed successfully!" });
       setShowConfirmModal(false);
       setCart([]);
+      setDiscountPercentage(0);
       
       // Optional: Redirect to sales list
       router.push("/sales");
@@ -386,10 +409,26 @@ export default function CreateSalePage() {
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
+              
+              {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
+                <div className="flex justify-between items-center text-gray-600 pt-2">
+                  <span>Discount (%)</span>
+                  <Input 
+                    type="number" 
+                    min={0} 
+                    max={100} 
+                    className="h-8 w-20 text-right"
+                    value={discountPercentage}
+                    onChange={(e) => setDiscountPercentage(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              )}
+
               <div className="flex justify-between text-gray-600">
-                <span>Discount</span>
-                <span>$0.00</span>
+                <span>Discount Amount</span>
+                <span className="text-red-500">-{formatCurrency(discountAmount)}</span>
               </div>
+              
               <div className="border-t border-gray-200 pt-3 flex justify-between font-bold text-lg text-gray-900">
                 <span>Total</span>
                 <span>{formatCurrency(total)}</span>
@@ -400,7 +439,7 @@ export default function CreateSalePage() {
               className="w-full mt-8" 
               size="lg"
               onClick={handleReviewSale}
-              disabled={cart.length === 0 || cart.some(i => i.quantity > i.inventory.quantity)}
+              disabled={cart.length === 0 || cart.some(i => i.quantity > i.inventory.quantity) || discountPercentage < 0 || discountPercentage > 100}
             >
               Review Sale
             </Button>
@@ -421,13 +460,31 @@ export default function CreateSalePage() {
           
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <div className="space-y-2 mb-4">
-              {cart.map(item => (
-                <div key={item.product.id} className="flex justify-between text-sm">
-                  <span>{item.quantity}x {item.product.name}</span>
-                  <span className="font-medium">{formatCurrency(item.quantity * item.unitPrice)}</span>
-                </div>
-              ))}
+              {cart.map(item => {
+                const discountedPrice = item.unitPrice * (1 - (discountPercentage / 100));
+                return (
+                  <div key={item.product.id} className="flex justify-between text-sm">
+                    <span>{item.quantity}x {item.product.name}</span>
+                    <div className="text-right">
+                      {discountPercentage > 0 && (
+                        <span className="line-through text-xs text-gray-400 mr-2">
+                          {formatCurrency(item.quantity * item.unitPrice)}
+                        </span>
+                      )}
+                      <span className="font-medium">{formatCurrency(item.quantity * discountedPrice)}</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            
+            {discountPercentage > 0 && (
+              <div className="border-t border-gray-200 pt-2 flex justify-between text-sm text-gray-600">
+                <span>Discount Applied</span>
+                <span className="text-red-500">{discountPercentage}%</span>
+              </div>
+            )}
+            
             <div className="border-t border-gray-200 pt-2 flex justify-between font-bold text-gray-900">
               <span>Total Amount</span>
               <span>{formatCurrency(total)}</span>

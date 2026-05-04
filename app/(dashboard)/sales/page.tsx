@@ -11,11 +11,14 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency, formatDate } from "@/lib/utils";
 
+import { Modal } from "@/components/ui/Modal";
+
 export default function SalesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
 
   useEffect(() => {
     const fetchSales = async () => {
@@ -63,7 +66,11 @@ export default function SalesPage() {
             </TableHeader>
             <TableBody>
               {sales.map((sale) => (
-                <TableRow key={sale.id}>
+                <TableRow 
+                  key={sale.id} 
+                  className="cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => setSelectedSale(sale)}
+                >
                   <TableCell className="font-medium text-gray-900">{sale.saleNumber}</TableCell>
                   <TableCell className="text-gray-500 font-mono text-xs">{sale.branchId}</TableCell>
                   <TableCell>
@@ -90,6 +97,68 @@ export default function SalesPage() {
           </Table>
         )}
       </div>
+
+      {/* Sale Details Modal */}
+      {selectedSale && (
+        <Modal
+          isOpen={!!selectedSale}
+          onClose={() => setSelectedSale(null)}
+          title={`Sale Details: ${selectedSale.saleNumber}`}
+        >
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-gray-500">Status</p>
+                <Badge variant={selectedSale.status === "COMPLETED" ? "success" : "default"} className="mt-1">
+                  {selectedSale.status}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-gray-500">Branch ID</p>
+                <p className="font-mono mt-1">{selectedSale.branchId}</p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="font-medium text-gray-900 mb-3 border-b pb-2">Line Items</h3>
+              <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedSale.items.map((item, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell>
+                          <p className="font-medium">{item.productName}</p>
+                          <p className="text-xs text-gray-500">{item.productSku}</p>
+                        </TableCell>
+                        <TableCell className="text-right">{item.quantity}</TableCell>
+                        <TableCell className="text-right">{formatCurrency(item.unitPrice)}</TableCell>
+                        <TableCell className="text-right font-medium">{formatCurrency(item.lineTotal || (item.quantity * item.unitPrice))}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center border-t pt-4">
+              <span className="font-semibold text-gray-900 text-lg">Total Amount</span>
+              <span className="font-bold text-xl text-blue-600">{formatCurrency(selectedSale.total)}</span>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button onClick={() => setSelectedSale(null)}>Close</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
