@@ -19,23 +19,47 @@ export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const fetchSales = async () => {
+    try {
+      const data = await apiClient<Sale[]>("/api/sales");
+      setSales(data);
+    } catch (error) {
+      toast({ type: "error", title: "Failed to load sales" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchSales = async () => {
-      try {
-        const data = await apiClient<Sale[]>("/api/sales");
-        setSales(data);
-      } catch (error) {
-        toast({ type: "error", title: "Failed to load sales" });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (user) {
       fetchSales();
     }
   }, [user, toast]);
+
+  const handleCancelSale = async () => {
+    if (!selectedSale) return;
+    
+    if (!window.confirm(`Are you sure you want to CANCEL sale ${selectedSale.saleNumber}? This action cannot be undone and will reverse inventory reductions.`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await apiClient(`/api/sales/${selectedSale.id}/cancel`, {
+        method: "POST"
+      });
+      
+      toast({ type: "success", title: "Sale canceled successfully!" });
+      setSelectedSale(null);
+      await fetchSales();
+    } catch (error: any) {
+      toast({ type: "error", title: "Failed to cancel sale", message: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -74,7 +98,10 @@ export default function SalesPage() {
                   <TableCell className="font-medium text-gray-900">{sale.saleNumber}</TableCell>
                   <TableCell className="text-gray-500 font-mono text-xs">{sale.branchId}</TableCell>
                   <TableCell>
-                    <Badge variant={sale.status === "COMPLETED" ? "success" : "default"}>
+                    <Badge variant={
+                      sale.status === "COMPLETED" ? "success" : 
+                      sale.status.includes("CANCEL") ? "destructive" : "default"
+                    }>
                       {sale.status}
                     </Badge>
                   </TableCell>
@@ -102,14 +129,17 @@ export default function SalesPage() {
       {selectedSale && (
         <Modal
           isOpen={!!selectedSale}
-          onClose={() => setSelectedSale(null)}
+          onClose={() => !isProcessing && setSelectedSale(null)}
           title={`Sale Details: ${selectedSale.saleNumber}`}
         >
           <div className="space-y-6">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-500">Status</p>
-                <Badge variant={selectedSale.status === "COMPLETED" ? "success" : "default"} className="mt-1">
+                <Badge variant={
+                  selectedSale.status === "COMPLETED" ? "success" : 
+                  selectedSale.status.includes("CANCEL") ? "destructive" : "default"
+                } className="mt-1">
                   {selectedSale.status}
                 </Badge>
               </div>
@@ -121,7 +151,7 @@ export default function SalesPage() {
 
             <div>
               <h3 className="font-medium text-gray-900 mb-3 border-b pb-2">Line Items</h3>
-              <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+              <div className="bg-gray-50 rounded-lg border border-gray-200 overflow-hidden max-h-[300px] overflow-y-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -153,8 +183,19 @@ export default function SalesPage() {
               <span className="font-bold text-xl text-blue-600">{formatCurrency(selectedSale.total)}</span>
             </div>
             
-            <div className="flex justify-end pt-2">
-              <Button onClick={() => setSelectedSale(null)}>Close</Button>
+            <div className="flex justify-between items-center pt-2">
+              <div>
+                {(user?.role === "ADMIN" || user?.role === "MANAGER") && selectedSale.status === "COMPLETED" && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleCancelSale}
+                    disabled={isProcessing}
+                  >
+                    Cancel Sale
+                  </Button>
+                )}
+              </div>
+              <Button variant="outline" onClick={() => setSelectedSale(null)} disabled={isProcessing}>Close</Button>
             </div>
           </div>
         </Modal>

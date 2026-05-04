@@ -121,7 +121,7 @@ export default function PurchaseOrdersPage() {
                   <TableCell>
                     <Badge variant={
                       po.status === "RECEIVED" ? "success" : 
-                      po.status === "CANCELED" ? "destructive" : "warning"
+                      po.status.includes("CANCEL") ? "destructive" : "warning"
                     }>
                       {po.status}
                     </Badge>
@@ -156,7 +156,7 @@ export default function PurchaseOrdersPage() {
                 <p className="text-gray-500">Status</p>
                 <Badge variant={
                   selectedOrder.status === "RECEIVED" ? "success" : 
-                  selectedOrder.status === "CANCELED" ? "destructive" : "warning"
+                  selectedOrder.status.includes("CANCEL") ? "destructive" : "warning"
                 } className="mt-1">
                   {selectedOrder.status}
                 </Badge>
