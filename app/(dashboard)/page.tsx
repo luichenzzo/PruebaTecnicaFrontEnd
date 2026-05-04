@@ -31,18 +31,22 @@ export default function DashboardHome() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        let inventoryUrl = "/api/inventory";
+        if (user?.role !== "ADMIN" && user?.branchId) {
+          inventoryUrl = `/api/inventory/branch/${user.branchId}`;
+        }
+
         if (user?.role === "ADMIN" || user?.role === "MANAGER") {
           const [overviewData, inventoryData] = await Promise.all([
             apiClient<ReportsOverview>("/api/reports/overview"),
-            apiClient<Inventory[]>("/api/inventory"),
+            apiClient<Inventory[]>(inventoryUrl),
           ]);
           setOverview(overviewData);
           // Simple client-side filter for low stock (assuming quantity < 10 for demo)
           setLowStock(inventoryData.filter((item) => item.quantity < 10));
         } else {
            // Operator only gets inventory for their branch
-           const branchQuery = user?.branchId ? `?branchId=${user.branchId}` : '';
-           const inventoryData = await apiClient<Inventory[]>(`/api/inventory${branchQuery}`);
+           const inventoryData = await apiClient<Inventory[]>(inventoryUrl);
            setLowStock(inventoryData.filter((item) => item.quantity < 10));
         }
       } catch (error) {

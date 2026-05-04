@@ -23,7 +23,11 @@ export default function SalesPage() {
 
   const fetchSales = async () => {
     try {
-      const data = await apiClient<Sale[]>("/api/sales");
+      let url = "/api/sales";
+      if (user?.role !== "ADMIN" && user?.branchId) {
+        url += `?branchId=${user.branchId}`;
+      }
+      const data = await apiClient<Sale[]>(url);
       setSales(data);
     } catch (error) {
       toast({ type: "error", title: "Failed to load sales" });
@@ -68,7 +72,12 @@ export default function SalesPage() {
           <h1 className="text-2xl font-bold text-gray-900">Sales</h1>
           <p className="text-sm text-gray-500 mt-1">Manage and view sales orders.</p>
         </div>
-        <Button className="gap-2" onClick={() => window.location.href = '/sales/create'}>
+        <Button 
+          className="gap-2" 
+          onClick={() => window.location.href = '/sales/create'}
+          disabled={user?.role === "ADMIN"}
+          title={user?.role === "ADMIN" ? "Admins cannot create sales directly" : ""}
+        >
           <Plus size={16} />
           Create Sale
         </Button>

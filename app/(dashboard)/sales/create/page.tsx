@@ -57,7 +57,12 @@ export default function CreateSalePage() {
       
       setIsLoading(true);
       try {
-        const inventoryUrl = branchId ? `/api/inventory?branchId=${branchId}` : "/api/inventory";
+        let inventoryUrl = "/api/inventory";
+        if (user?.role !== "ADMIN" && branchId) {
+          inventoryUrl = `/api/inventory/branch/${branchId}`;
+        } else if (branchId) {
+          inventoryUrl = `/api/inventory?branchId=${branchId}`;
+        }
         
         const [invData, productsData] = await Promise.allSettled([
           apiClient<Inventory[]>(inventoryUrl),

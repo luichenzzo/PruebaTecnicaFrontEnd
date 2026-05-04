@@ -22,8 +22,8 @@ export default function InventoryPage() {
     const fetchInventory = async () => {
       try {
         let url = "/api/inventory";
-        if (user?.role === "OPERATOR" && user.branchId) {
-          url += `?branchId=${user.branchId}`;
+        if (user?.role !== "ADMIN" && user?.branchId) {
+          url = `/api/inventory/branch/${user.branchId}`;
         }
         
         // Fetch inventory and products concurrently
