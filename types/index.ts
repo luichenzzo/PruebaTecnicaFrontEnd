@@ -145,6 +145,19 @@ export interface TransferItem {
   quantity: number;
 }
 
+export interface CreateTransferItemRequest {
+  productId: string;
+  quantity: number;
+  unitPrice?: number; // In case the backend uses the same OrderItemRequest
+}
+
+export interface CreateTransferRequest {
+  transferNumber: string;
+  fromBranchId: string;
+  toBranchId: string;
+  items: CreateTransferItemRequest[];
+}
+
 export interface Transfer {
   id: string;
   transferNumber: string;
