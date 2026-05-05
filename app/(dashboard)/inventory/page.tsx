@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/Input";
 import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function InventoryPage() {
   const { user } = useAuth();
@@ -17,6 +18,14 @@ export default function InventoryPage() {
   const [inventory, setInventory] = useState<(Inventory & { defaultCost?: number; branchCode?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [refresh, setRefresh] = useState(0);
+
+  // Listen to real-time updates from WebSocket
+  useWebSocket("/topic/inventory", () => {
+    console.log("[Inventory] Received update, refetching...");
+    toast({ type: "success", title: "Real-time update received!", message: "Inventory has been refreshed." });
+    setRefresh(prev => prev + 1);
+  });
 
   useEffect(() => {
     const fetchInventory = async () => {
@@ -63,7 +72,7 @@ export default function InventoryPage() {
     if (user) {
       fetchInventory();
     }
-  }, [user, toast]);
+  }, [user, refresh, toast]);
 
   const filteredInventory = inventory.filter(p => 
     p.productName.toLowerCase().includes(searchTerm.toLowerCase()) || 

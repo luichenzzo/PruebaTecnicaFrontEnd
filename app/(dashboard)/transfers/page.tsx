@@ -10,6 +10,7 @@ import { ArrowRightLeft, Plus, Inbox, Send } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Modal } from "@/components/ui/Modal";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function TransfersPage() {
   const { user } = useAuth();
@@ -79,6 +80,15 @@ export default function TransfersPage() {
       setIsLoading(false);
     }
   }, [user, activeTab, toast]);
+
+  // Listen to real-time updates from WebSocket
+  useWebSocket("/topic/transfers", () => {
+    console.log("[Transfers] Received update, refetching...");
+    toast({ type: "success", title: "Real-time update received!", message: "Transfers list has been refreshed." });
+    if (user?.role === "ADMIN" || user?.role === "MANAGER") {
+      fetchTransfers();
+    }
+  });
 
   const handleAction = async (action: "approve" | "complete") => {
     if (!selectedTransfer) return;
