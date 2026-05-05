@@ -12,6 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
 import { Search, Plus, Trash2, ArrowLeft, AlertCircle } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface CartItem {
   product: Product;
@@ -36,6 +37,11 @@ export default function CreateSalePage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [branchId, setBranchId] = useState<string>("");
   const [discountPercentage, setDiscountPercentage] = useState<number>(0);
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/inventory", () => {
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   useEffect(() => {
     // Determine the branch to operate in
@@ -102,6 +108,21 @@ export default function CreateSalePage() {
         if (!branchId && inventory.length > 0) {
           setBranchId(inventory[0].branchId);
         }
+
+        // Sync cart with updated inventory
+        setCart(prev => {
+           return prev.filter(item => {
+               const foundInv = inventory.find(i => i.productId === item.product.id);
+               return foundInv && foundInv.quantity > 0;
+           }).map(item => {
+               const foundInv = inventory.find(i => i.productId === item.product.id)!;
+               return {
+                   ...item,
+                   inventory: foundInv,
+                   quantity: Math.min(item.quantity, foundInv.quantity)
+               };
+           });
+        });
       } catch (error) {
         toast({ type: "error", title: "Failed to load product catalog" });
       } finally {
@@ -110,7 +131,7 @@ export default function CreateSalePage() {
     };
 
     fetchCatalog();
-  }, [branchId, user, toast]);
+  }, [branchId, user, refresh, toast]);
 
   const addToCart = (catalogItem: { product: Product; inventory: Inventory }) => {
     setCart(prev => {

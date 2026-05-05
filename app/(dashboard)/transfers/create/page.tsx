@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/Input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { Modal } from "@/components/ui/Modal";
 import { Search, Plus, Trash2, ArrowLeft, AlertCircle } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface TransferCartItem {
   product: Product;
@@ -35,6 +36,11 @@ export default function CreateTransferPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [fromBranchId, setFromBranchId] = useState<string>("");
   const [toBranchId, setToBranchId] = useState<string>("");
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/inventory", () => {
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   useEffect(() => {
     // Only Admin & Manager can access Transfers
@@ -127,7 +133,7 @@ export default function CreateTransferPage() {
     };
 
     fetchCatalog();
-  }, [fromBranchId, user, toast]);
+  }, [fromBranchId, user, refresh, toast]);
 
   const addToCart = (catalogItem: { product: Product; inventory: Inventory }) => {
     setCart(prev => {
