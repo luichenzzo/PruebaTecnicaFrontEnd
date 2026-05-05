@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Sale } from "@/types";
+import { Sale, Branch } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -9,14 +9,14 @@ import { Button } from "@/components/ui/Button";
 import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 
 import { Modal } from "@/components/ui/Modal";
 
 export default function SalesPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<(Sale & { branchCode?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,8 +27,30 @@ export default function SalesPage() {
       if (user?.role !== "ADMIN" && user?.branchId) {
         url += `?branchId=${user.branchId}`;
       }
-      const data = await apiClient<Sale[]>(url);
-      setSales(data);
+      
+      // Fetch sales and branches concurrently
+      const [salesData, branchesData] = await Promise.allSettled([
+        apiClient<Sale[]>(url),
+        apiClient<Branch[]>("/api/branches")
+      ]);
+
+      if (salesData.status === "rejected") {
+        throw new Error("Failed to load sales");
+      }
+
+      const sales = salesData.value;
+      const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
+
+      // Map branch code into sales data
+      const mappedSales = sales.map(sale => {
+        const branch = branches.find(b => b.id === sale.branchId);
+        return {
+          ...sale,
+          branchCode: branch?.code || sale.branchId // Fallback to branchId if branch not found
+        };
+      });
+
+      setSales(mappedSales);
     } catch (error) {
       toast({ type: "error", title: "Failed to load sales" });
     } finally {
@@ -91,7 +113,7 @@ export default function SalesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Sale Number</TableHead>
-                <TableHead>Branch</TableHead>
+                <TableHead>Branch Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead className="text-right">Total</TableHead>
@@ -100,12 +122,12 @@ export default function SalesPage() {
             <TableBody>
               {sales.map((sale) => (
                 <TableRow 
-                  key={sale.id} 
+                  key={sale.id}
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => setSelectedSale(sale)}
                 >
                   <TableCell className="font-medium text-gray-900">{sale.saleNumber}</TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{sale.branchId}</TableCell>
+                  <TableCell className="text-gray-500 font-mono text-xs">{sale.branchCode}</TableCell>
                   <TableCell>
                     <Badge variant={
                       sale.status === "COMPLETED" ? "success" : 
@@ -153,8 +175,8 @@ export default function SalesPage() {
                 </Badge>
               </div>
               <div>
-                <p className="text-gray-500">Branch ID</p>
-                <p className="font-mono mt-1">{selectedSale.branchId}</p>
+                <p className="text-gray-500">Branch Code</p>
+                <p className="font-mono mt-1">{selectedSale.branchCode}</p>
               </div>
             </div>
 

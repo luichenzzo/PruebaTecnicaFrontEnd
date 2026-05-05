@@ -11,6 +11,7 @@ import {
   Truck,
   ArrowRightLeft,
   History,
+  Settings,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 
@@ -22,6 +23,7 @@ const navItems = [
   { name: "Purchase Orders", href: "/purchase-orders", icon: Truck, roles: ["ADMIN", "MANAGER"] },
   { name: "Transfers", href: "/transfers", icon: ArrowRightLeft, roles: ["ADMIN", "MANAGER"] },
   { name: "Movements", href: "/movements", icon: History, roles: ["ADMIN", "MANAGER"] },
+  { name: "Branch Mgmt", href: "/branch-management", icon: Settings, roles: ["ADMIN", "MANAGER"] },
 ];
 
 export function Sidebar() {

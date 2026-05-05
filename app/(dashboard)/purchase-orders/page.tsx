@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PurchaseOrder } from "@/types";
+import { PurchaseOrder, Branch } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -15,15 +15,36 @@ import { Modal } from "@/components/ui/Modal";
 export default function PurchaseOrdersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [orders, setOrders] = useState<(PurchaseOrder & { branchCode?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchOrders = async () => {
     try {
-      const data = await apiClient<PurchaseOrder[]>("/api/purchase-orders");
-      setOrders(data);
+      // Fetch purchase orders and branches concurrently
+      const [ordersData, branchesData] = await Promise.allSettled([
+        apiClient<PurchaseOrder[]>("/api/purchase-orders"),
+        apiClient<Branch[]>("/api/branches")
+      ]);
+
+      if (ordersData.status === "rejected") {
+        throw new Error("Failed to load purchase orders");
+      }
+
+      const orders = ordersData.value;
+      const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
+
+      // Map branch code into orders data
+      const mappedOrders = orders.map(order => {
+        const branch = branches.find(b => b.id === order.branchId);
+        return {
+          ...order,
+          branchCode: branch?.code || order.branchId // Fallback to branchId if branch not found
+        };
+      });
+
+      setOrders(mappedOrders);
     } catch (error) {
       toast({ type: "error", title: "Failed to load purchase orders" });
     } finally {
@@ -103,7 +124,7 @@ export default function PurchaseOrdersPage() {
               <TableRow>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Supplier ID</TableHead>
-                <TableHead>Branch ID</TableHead>
+                <TableHead>Branch Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Total</TableHead>
               </TableRow>
@@ -117,7 +138,7 @@ export default function PurchaseOrdersPage() {
                 >
                   <TableCell className="font-medium text-gray-900">{po.orderNumber}</TableCell>
                   <TableCell className="text-gray-500 font-mono text-xs">{po.supplierId}</TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{po.branchId}</TableCell>
+                  <TableCell className="text-gray-500 font-mono text-xs">{po.branchCode}</TableCell>
                   <TableCell>
                     <Badge variant={
                       po.status === "RECEIVED" ? "success" : 
@@ -162,8 +183,8 @@ export default function PurchaseOrdersPage() {
                 </Badge>
               </div>
               <div>
-                <p className="text-gray-500">Branch ID</p>
-                <p className="font-mono mt-1">{selectedOrder.branchId}</p>
+                <p className="text-gray-500">Branch Code</p>
+                <p className="font-mono mt-1">{selectedOrder.branchCode}</p>
               </div>
               <div>
                 <p className="text-gray-500">Supplier ID</p>

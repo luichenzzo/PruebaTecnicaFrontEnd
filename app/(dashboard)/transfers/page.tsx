@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Transfer } from "@/types";
+import { Transfer, Branch } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -13,14 +13,37 @@ import { useToast } from "@/components/ui/Toast";
 export default function TransfersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [transfers, setTransfers] = useState<Transfer[]>([]);
+  const [transfers, setTransfers] = useState<(Transfer & { fromBranchCode?: string; toBranchCode?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchTransfers = async () => {
       try {
-        const data = await apiClient<Transfer[]>("/api/transfers");
-        setTransfers(data);
+        // Fetch transfers and branches concurrently
+        const [transfersData, branchesData] = await Promise.allSettled([
+          apiClient<Transfer[]>("/api/transfers"),
+          apiClient<Branch[]>("/api/branches")
+        ]);
+
+        if (transfersData.status === "rejected") {
+          throw new Error("Failed to load transfers");
+        }
+
+        const transfers = transfersData.value;
+        const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
+
+        // Map branch codes into transfers data
+        const mappedTransfers = transfers.map(transfer => {
+          const fromBranch = branches.find(b => b.id === transfer.fromBranchId);
+          const toBranch = branches.find(b => b.id === transfer.toBranchId);
+          return {
+            ...transfer,
+            fromBranchCode: fromBranch?.code || transfer.fromBranchId,
+            toBranchCode: toBranch?.code || transfer.toBranchId
+          };
+        });
+
+        setTransfers(mappedTransfers);
       } catch (error) {
         toast({ type: "error", title: "Failed to load transfers" });
       } finally {
@@ -68,9 +91,9 @@ export default function TransfersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Transfer Number</TableHead>
-                <TableHead>Origin</TableHead>
+                <TableHead>Origin Branch Code</TableHead>
                 <TableHead></TableHead>
-                <TableHead>Destination</TableHead>
+                <TableHead>Destination Branch Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Items</TableHead>
               </TableRow>
@@ -79,9 +102,9 @@ export default function TransfersPage() {
               {transfers.map((trf) => (
                 <TableRow key={trf.id}>
                   <TableCell className="font-medium text-gray-900">{trf.transferNumber}</TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{trf.fromBranchId}</TableCell>
+                  <TableCell className="text-gray-500 font-mono text-xs">{trf.fromBranchCode}</TableCell>
                   <TableCell className="text-gray-300"><ArrowRightLeft size={16} /></TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{trf.toBranchId}</TableCell>
+                  <TableCell className="text-gray-500 font-mono text-xs">{trf.toBranchCode}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusBadge(trf.status)}>
                       {trf.status.replace("_", " ")}

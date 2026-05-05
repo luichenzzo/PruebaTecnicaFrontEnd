@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Inventory } from "@/types";
+import { Inventory, Product, Branch } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -13,8 +13,8 @@ import { useToast } from "@/components/ui/Toast";
 export default function InventoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  // We'll store mapped inventory that includes defaultCost from products
-  const [inventory, setInventory] = useState<(Inventory & { defaultCost?: number })[]>([]);
+  // We'll store mapped inventory that includes defaultCost from products and branchCode
+  const [inventory, setInventory] = useState<(Inventory & { defaultCost?: number; branchCode?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -26,10 +26,11 @@ export default function InventoryPage() {
           url = `/api/inventory/branch/${user.branchId}`;
         }
         
-        // Fetch inventory and products concurrently
-        const [invData, productsData] = await Promise.allSettled([
+        // Fetch inventory, products, and branches concurrently
+        const [invData, productsData, branchesData] = await Promise.allSettled([
           apiClient<Inventory[]>(url),
-          apiClient<Product[]>("/api/products")
+          apiClient<Product[]>("/api/products"),
+          apiClient<Branch[]>("/api/branches")
         ]);
 
         if (invData.status === "rejected") {
@@ -38,13 +39,16 @@ export default function InventoryPage() {
 
         const inv = invData.value;
         const prods = productsData.status === "fulfilled" ? productsData.value : [];
+        const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
 
-        // Map the default cost from products into the inventory data
+        // Map the default cost from products and branch code from branches into the inventory data
         const mappedInventory = inv.map(item => {
           const product = prods.find(p => p.id === item.productId);
+          const branch = branches.find(b => b.id === item.branchId);
           return {
             ...item,
-            defaultCost: product?.defaultCost
+            defaultCost: product?.defaultCost,
+            branchCode: branch?.code || item.branchId // Fallback to branchId if branch not found
           };
         });
 
@@ -94,7 +98,7 @@ export default function InventoryPage() {
               <TableRow>
                 <TableHead>SKU</TableHead>
                 <TableHead>Product Name</TableHead>
-                <TableHead>Branch ID</TableHead>
+                <TableHead>Branch Code</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
                 <TableHead className="text-right">Reserved</TableHead>
@@ -106,7 +110,7 @@ export default function InventoryPage() {
                 <TableRow key={item.id}>
                   <TableCell className="font-medium text-gray-900">{item.productSku}</TableCell>
                   <TableCell>{item.productName}</TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{item.branchId}</TableCell>
+                  <TableCell className="text-gray-500 font-mono text-xs">{item.branchCode}</TableCell>
                   <TableCell className="text-right text-gray-600">
                     {item.productDefaultCost !== undefined 
                       ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.productDefaultCost) 

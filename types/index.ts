@@ -9,6 +9,24 @@ export interface User {
   branchId: string | null;
 }
 
+export interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  address: string;
+  phone: string;
+  isActive: boolean;
+}
+
+export interface RegisterRequest {
+  username: string;
+  fullName: string;
+  email: string;
+  password?: string;
+  role: Role;
+  branchId?: string;
+}
+
 export interface AuthResponse {
   token: string;
   tokenType: string;
@@ -33,6 +51,7 @@ export interface Inventory {
   productSku: string;
   productName: string;
   branchId: string;
+  branchCode: string;
   quantity: number;
   reserved: number;
   defaultCost?: number; // Added based on product having defaultCost
@@ -54,6 +73,7 @@ export interface Sale {
   id: string;
   saleNumber: string;
   branchId: string;
+  branchCode: string;
   status: string;
   total: number;
   items: SaleItem[];
@@ -100,6 +120,7 @@ export interface PurchaseOrder {
   orderNumber: string;
   supplierId: string;
   branchId: string;
+  branchCode: string;
   status: string;
   total: number;
   items: PurchaseOrderItem[];
@@ -119,6 +140,8 @@ export interface Transfer {
   transferNumber: string;
   fromBranchId: string;
   toBranchId: string;
+  fromBranchCode: string;
+  toBranchCode: string;
   status: string;
   items: TransferItem[];
   createdById: string | null;
@@ -131,6 +154,7 @@ export interface InventoryMovement {
   productId: string;
   productSku: string;
   branchId: string;
+  branchCode: string;
   movementCategory: "IN" | "OUT" | "TRANSFER" | "ADJUSTMENT";
   movementType: string;
   quantity: number;
