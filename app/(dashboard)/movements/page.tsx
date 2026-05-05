@@ -9,12 +9,19 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { formatDate } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, ArrowRightLeft, Settings2 } from "lucide-react";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function MovementsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/inventory-movements", () => {
+    toast({ type: "success", title: "Real-time update received!", message: "Movements have been refreshed." });
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   useEffect(() => {
     const fetchMovements = async () => {
@@ -33,7 +40,7 @@ export default function MovementsPage() {
     } else {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, refresh, toast]);
 
   if (user?.role !== "ADMIN" && user?.role !== "MANAGER") {
     return <div className="text-red-500">Access Denied.</div>;

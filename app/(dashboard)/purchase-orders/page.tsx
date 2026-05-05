@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils";
 import { Modal } from "@/components/ui/Modal";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function PurchaseOrdersPage() {
   const { user } = useAuth();
@@ -19,6 +20,12 @@ export default function PurchaseOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/purchase-orders", () => {
+    toast({ type: "success", title: "Real-time update received!", message: "Purchase orders have been refreshed." });
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   const fetchOrders = async () => {
     try {
@@ -62,7 +69,7 @@ export default function PurchaseOrdersPage() {
     } else {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, refresh, toast]);
 
   const handleAction = async (action: "receive" | "cancel") => {
     if (!selectedOrder) return;

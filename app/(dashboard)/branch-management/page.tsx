@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Modal } from "@/components/ui/Modal";
 import { Input } from "@/components/ui/Input";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function BranchManagementPage() {
   const { user } = useAuth();
@@ -20,6 +21,12 @@ export default function BranchManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/branches", () => {
+    toast({ type: "success", title: "Real-time update received!", message: "Branches have been refreshed." });
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   // Modals state
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -69,7 +76,7 @@ export default function BranchManagementPage() {
     } else {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, refresh, toast]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();

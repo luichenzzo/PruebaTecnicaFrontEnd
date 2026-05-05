@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/Input";
 import { Plus, Search, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 export default function ProductsPage() {
   const { user } = useAuth();
@@ -17,6 +18,12 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [refresh, setRefresh] = useState(0);
+
+  useWebSocket("/topic/products", () => {
+    toast({ type: "success", title: "Real-time update received!", message: "Products have been refreshed." });
+    setTimeout(() => setRefresh(prev => prev + 1), 800);
+  });
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -35,7 +42,7 @@ export default function ProductsPage() {
     } else {
       setIsLoading(false);
     }
-  }, [user, toast]);
+  }, [user, refresh, toast]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
