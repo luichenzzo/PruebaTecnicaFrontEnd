@@ -24,22 +24,23 @@ export default function InventoryPage() {
   useWebSocket("/topic/inventory", () => {
     console.log("[Inventory] Received update, refetching...");
     toast({ type: "success", title: "Real-time update received!", message: "Inventory has been refreshed." });
-    setRefresh(prev => prev + 1);
+    setTimeout(() => setRefresh(prev => prev + 1), 800); // 800ms delay to ensure backend transaction is fully committed
   });
 
   useEffect(() => {
     const fetchInventory = async () => {
       try {
         let url = "/api/inventory";
+        const t = Date.now();
         if (user?.role !== "ADMIN" && user?.branchId) {
           url = `/api/inventory/branch/${user.branchId}`;
         }
         
         // Fetch inventory, products, and branches concurrently
         const [invData, productsData, branchesData] = await Promise.allSettled([
-          apiClient<Inventory[]>(url),
-          apiClient<Product[]>("/api/products"),
-          apiClient<Branch[]>("/api/branches")
+          apiClient<Inventory[]>(`${url}?_t=${t}`),
+          apiClient<Product[]>(`/api/products?_t=${t}`),
+          apiClient<Branch[]>(`/api/branches?_t=${t}`)
         ]);
 
         if (invData.status === "rejected") {

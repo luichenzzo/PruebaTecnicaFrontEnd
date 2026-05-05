@@ -44,19 +44,20 @@ export default function TransfersPage() {
     setIsLoading(true);
     try {
       let transfersPromise;
+      const t = Date.now();
       if (user.role === "ADMIN") {
-        transfersPromise = apiClient<Transfer[]>("/api/transfers");
+        transfersPromise = apiClient<Transfer[]>(`/api/transfers?_t=${t}`);
       } else {
         if (activeTab === "incoming") {
-          transfersPromise = apiClient<Transfer[]>(`/api/transfers/to/${user.branchId}`);
+          transfersPromise = apiClient<Transfer[]>(`/api/transfers/to/${user.branchId}?_t=${t}`);
         } else {
-          transfersPromise = apiClient<Transfer[]>(`/api/transfers/from/${user.branchId}`);
+          transfersPromise = apiClient<Transfer[]>(`/api/transfers/from/${user.branchId}?_t=${t}`);
         }
       }
 
       const [transfersData, branchesData] = await Promise.allSettled([
         transfersPromise,
-        apiClient<Branch[]>("/api/branches")
+        apiClient<Branch[]>(`/api/branches?_t=${t}`)
       ]);
 
       if (transfersData.status === "rejected") {
@@ -95,9 +96,11 @@ export default function TransfersPage() {
   useWebSocket("/topic/transfers", () => {
     console.log("[Transfers] Received update, refetching...");
     toast({ type: "success", title: "Real-time update received!", message: "Transfers list has been refreshed." });
-    if (user?.role === "ADMIN" || user?.role === "MANAGER") {
-      fetchTransfers();
-    }
+    setTimeout(() => {
+      if (user?.role === "ADMIN" || user?.role === "MANAGER") {
+        fetchTransfers();
+      }
+    }, 800); // 800ms delay to ensure backend transaction is fully committed
   });
 
   const handleAction = async (action: "approve" | "cancel") => {

@@ -10,6 +10,7 @@ import { Plus } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 import { Modal } from "@/components/ui/Modal";
 
@@ -24,14 +25,17 @@ export default function SalesPage() {
   const fetchSales = async () => {
     try {
       let url = "/api/sales";
+      const t = Date.now();
       if (user?.role !== "ADMIN" && user?.branchId) {
-        url += `?branchId=${user.branchId}`;
+        url += `?branchId=${user.branchId}&_t=${t}`;
+      } else {
+        url += `?_t=${t}`;
       }
       
       // Fetch sales and branches concurrently
       const [salesData, branchesData] = await Promise.allSettled([
         apiClient<Sale[]>(url),
-        apiClient<Branch[]>("/api/branches")
+        apiClient<Branch[]>(`/api/branches?_t=${t}`)
       ]);
 
       if (salesData.status === "rejected") {
@@ -63,6 +67,16 @@ export default function SalesPage() {
       fetchSales();
     }
   }, [user, toast]);
+
+  useWebSocket("/topic/sales", () => {
+    console.log("[Sales] Received update, refetching...");
+    toast({ type: "success", title: "Real-time update received!", message: "Sales list has been refreshed." });
+    setTimeout(() => {
+      if (user) {
+        fetchSales();
+      }
+    }, 800); // 800ms delay to ensure backend transaction is fully committed
+  });
 
   const handleCancelSale = async () => {
     if (!selectedSale) return;

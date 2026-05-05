@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Product, Transfer, CreateTransferRequest, Branch } from "@/types";
+import { Product, Transfer, CreateTransferRequest, Branch, Inventory } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useToast } from "@/components/ui/Toast";
@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
 import { Modal } from "@/components/ui/Modal";
-import { Search, Plus, Trash2, ArrowLeft } from "lucide-react";
+import { Search, Plus, Trash2, ArrowLeft, AlertCircle } from "lucide-react";
 
 interface TransferCartItem {
   product: Product;
+  inventory: Inventory;
   quantity: number;
 }
 
@@ -22,7 +23,7 @@ export default function CreateTransferPage() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [availableProducts, setAvailableProducts] = useState<{ product: Product; inventory: Inventory }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [branches, setBranches] = useState<Branch[]>([]);
   
@@ -47,41 +48,104 @@ export default function CreateTransferPage() {
     }
   }, [user, router]);
 
-  // Fetch products and branches
+  // Fetch branches
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchBranches = async () => {
+      try {
+        const fetchedBranches = await apiClient<Branch[]>("/api/branches");
+        setBranches(fetchedBranches);
+      } catch (error) {
+        toast({ type: "error", title: "Failed to load branches" });
+      }
+    };
+    fetchBranches();
+  }, [toast]);
+
+  // Fetch catalog when fromBranchId changes
+  useEffect(() => {
+    const fetchCatalog = async () => {
+      if (!fromBranchId) {
+        setAvailableProducts([]);
+        setIsLoading(false);
+        return;
+      }
+      
       setIsLoading(true);
       try {
-        const [products, fetchedBranches] = await Promise.all([
-          apiClient<Product[]>("/api/products"),
-          apiClient<Branch[]>("/api/branches")
+        const inventoryUrl = `/api/inventory/branch/${fromBranchId}`;
+        
+        const [invData, productsData] = await Promise.allSettled([
+          apiClient<Inventory[]>(inventoryUrl),
+          apiClient<Product[]>("/api/products")
         ]);
+
+        if (invData.status === "rejected") {
+          throw new Error("Failed to load inventory");
+        }
+
+        const inventory = invData.value;
+        const products = productsData.status === "fulfilled" ? productsData.value : [];
+
+        const catalog = inventory.map(inv => {
+          const product = products.find(p => p.id === inv.productId);
+          return {
+            product: product || {
+              id: inv.productId,
+              sku: inv.productSku,
+              name: inv.productName,
+              description: "",
+              unitOfMeasureId: null,
+              supplierId: null,
+              defaultCost: 0,
+              createdById: null,
+              updatedById: null,
+            },
+            inventory: inv
+          };
+        }).filter(item => item.inventory.quantity > 0);
+
+        setAvailableProducts(catalog as { product: Product; inventory: Inventory }[]);
         
-        setAvailableProducts(products);
-        setBranches(fetchedBranches);
-        
+        setCart(prev => {
+           return prev.filter(item => {
+               const foundInv = inventory.find(i => i.productId === item.product.id);
+               return foundInv && foundInv.quantity > 0;
+           }).map(item => {
+               const foundInv = inventory.find(i => i.productId === item.product.id)!;
+               return {
+                   ...item,
+                   inventory: foundInv,
+                   quantity: Math.min(item.quantity, foundInv.quantity)
+               };
+           });
+        });
       } catch (error) {
-        toast({ type: "error", title: "Failed to load necessary data" });
+        toast({ type: "error", title: "Failed to load product catalog" });
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchData();
-  }, [toast]);
+    fetchCatalog();
+  }, [fromBranchId, user, toast]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (catalogItem: { product: Product; inventory: Inventory }) => {
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => item.product.id === catalogItem.product.id);
       if (existing) {
+        if (existing.quantity + 1 > catalogItem.inventory.quantity) {
+          toast({ type: "error", title: "Insufficient stock", message: `Only ${catalogItem.inventory.quantity} available.` });
+          return prev;
+        }
         return prev.map(item => 
-          item.product.id === product.id 
+          item.product.id === catalogItem.product.id 
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
       return [...prev, {
-        product: product,
+        product: catalogItem.product,
+        inventory: catalogItem.inventory,
         quantity: 1
       }];
     });
@@ -90,6 +154,10 @@ export default function CreateTransferPage() {
   const updateQuantity = (productId: string, newQuantity: number) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === productId) {
+        if (newQuantity > item.inventory.quantity) {
+          toast({ type: "error", title: "Insufficient stock", message: `Cannot exceed available stock of ${item.inventory.quantity}.` });
+          return item;
+        }
         return { ...item, quantity: Math.max(1, newQuantity) };
       }
       return item;
@@ -192,8 +260,8 @@ export default function CreateTransferPage() {
   };
 
   const filteredCatalog = availableProducts.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    item.product.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -255,23 +323,34 @@ export default function CreateTransferPage() {
 
             {isLoading ? (
               <div className="text-center py-8 text-gray-500">Loading catalog...</div>
+            ) : !fromBranchId ? (
+              <div className="text-center py-8 text-gray-500">Select an origin branch to view available products.</div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[300px] overflow-y-auto pr-2">
-                {filteredCatalog.map((product) => (
+                {filteredCatalog.map(({ product, inventory }) => (
                   <div key={product.id} className="border border-gray-100 rounded-lg p-4 hover:border-blue-200 transition-colors flex justify-between items-center">
                     <div>
                       <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-xs text-gray-500 mt-1">SKU: {product.sku}</p>
+                      <div className="flex gap-3 text-xs mt-1">
+                        <span className="text-gray-500">SKU: {product.sku}</span>
+                        <span className="text-blue-600 font-semibold">Stock: {inventory.quantity}</span>
+                      </div>
                     </div>
                     <Button 
                       size="sm" 
                       variant="secondary"
-                      onClick={() => addToCart(product)}
+                      onClick={() => addToCart({ product, inventory })}
+                      disabled={inventory.quantity < 1}
                     >
                       <Plus size={16} />
                     </Button>
                   </div>
                 ))}
+                {filteredCatalog.length === 0 && (
+                  <div className="col-span-full text-center py-8 text-gray-500">
+                    No products found in stock for this branch.
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -289,27 +368,36 @@ export default function CreateTransferPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {cart.map((item) => (
-                  <TableRow key={item.product.id}>
-                    <TableCell>
-                      <p className="font-medium">{item.product.name}</p>
-                    </TableCell>
-                    <TableCell>
-                      <Input 
-                        type="number" 
-                        min={1} 
-                        value={item.quantity}
-                        onChange={(e) => updateQuantity(item.product.id, parseInt(e.target.value) || 1)}
-                        className="h-8"
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.product.id)} className="text-red-500 hover:bg-red-50">
-                        <Trash2 size={16} />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {cart.map((item) => {
+                  const isInvalid = item.quantity > item.inventory.quantity;
+                  return (
+                    <TableRow key={item.product.id} className={isInvalid ? "bg-red-50/50" : ""}>
+                      <TableCell>
+                        <p className="font-medium">{item.product.name}</p>
+                        {isInvalid && (
+                          <p className="text-xs text-red-600 flex items-center gap-1 mt-1">
+                            <AlertCircle size={12} /> Exceeds stock ({item.inventory.quantity})
+                          </p>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Input 
+                          type="number" 
+                          min={1} 
+                          max={item.inventory.quantity}
+                          value={item.quantity}
+                          onChange={(e) => updateQuantity(item.product.id, parseInt(e.target.value) || 1)}
+                          className={`h-8 ${isInvalid ? "border-red-300 focus:ring-red-500" : ""}`}
+                        />
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => removeFromCart(item.product.id)} className="text-red-500 hover:bg-red-50">
+                          <Trash2 size={16} />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
                 {cart.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center py-8 text-gray-500">
