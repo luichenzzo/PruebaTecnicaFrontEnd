@@ -24,9 +24,10 @@ export default function TransfersPage() {
   
   const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // State to track modified received quantities
-  const [receivedQuantities, setReceivedQuantities] = useState<Record<string, number>>({});
+  // State to track modified received/shipped quantities
+  const [adjustedQuantities, setAdjustedQuantities] = useState<Record<string, number>>({});
 
   // Reset quantities when a transfer is selected
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function TransfersPage() {
       selectedTransfer.items.forEach(item => {
         initialQuantities[item.productId] = item.quantity;
       });
-      setReceivedQuantities(initialQuantities);
+      setAdjustedQuantities(initialQuantities);
     }
   }, [selectedTransfer]);
 
@@ -103,7 +104,7 @@ export default function TransfersPage() {
     }, 800); // 800ms delay to ensure backend transaction is fully committed
   });
 
-  const handleAction = async (action: "approve" | "cancel") => {
+  const handleAction = async (action: "cancel") => {
     if (!selectedTransfer) return;
     
     setIsProcessing(true);
@@ -114,7 +115,7 @@ export default function TransfersPage() {
       
       toast({ 
         type: "success", 
-        title: `Transfer ${action === 'approve' ? 'approved (in transit)' : 'cancelled'} successfully!` 
+        title: `Transfer cancelled successfully!` 
       });
       
       setSelectedTransfer(null);
@@ -126,14 +127,70 @@ export default function TransfersPage() {
     }
   };
 
+  const handleApprove = async () => {
+    if (!selectedTransfer) return;
+    setIsProcessing(true);
+
+    try {
+      const isPartial = selectedTransfer.items.some(
+        item => adjustedQuantities[item.productId] < item.quantity
+      );
+
+      if (!isPartial) {
+        await apiClient(`/api/transfers/${selectedTransfer.id}/approve`, {
+          method: "POST"
+        });
+        toast({ type: "success", title: "Transfer approved (in transit) successfully!" });
+      } else {
+        // Partial dispatch
+        await apiClient(`/api/transfers/${selectedTransfer.id}/cancel`, {
+          method: "POST"
+        });
+
+        const payload: CreateTransferRequest = {
+          transferNumber: `${selectedTransfer.transferNumber}-ADJ`,
+          fromBranchId: selectedTransfer.fromBranchId,
+          toBranchId: selectedTransfer.toBranchId,
+          items: selectedTransfer.items.map(item => ({
+            productId: item.productId,
+            quantity: adjustedQuantities[item.productId] || 0,
+            unitPrice: 0
+          })).filter(item => item.quantity > 0)
+        };
+
+        if (payload.items.length > 0) {
+          const newTransfer = await apiClient<Transfer>("/api/transfers", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          
+          await apiClient(`/api/transfers/${newTransfer.id}/approve`, {
+            method: "POST"
+          });
+          
+          toast({ type: "success", title: "Partial transfer approved and dispatched!" });
+        } else {
+          toast({ type: "success", title: "Transfer cancelled. No items were shipped." });
+        }
+      }
+
+      setSelectedTransfer(null);
+      await fetchTransfers();
+    } catch (error: any) {
+      toast({ type: "error", title: "Failed to approve transfer", message: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const handleReceive = async () => {
     if (!selectedTransfer) return;
     setIsProcessing(true);
 
     try {
-      // Check if any received quantity is less than original
+      // Check if any adjusted quantity is less than original
       const isPartial = selectedTransfer.items.some(
-        item => receivedQuantities[item.productId] < item.quantity
+        item => adjustedQuantities[item.productId] < item.quantity
       );
 
       if (!isPartial) {
@@ -156,7 +213,7 @@ export default function TransfersPage() {
           toBranchId: selectedTransfer.toBranchId,
           items: selectedTransfer.items.map(item => ({
             productId: item.productId,
-            quantity: receivedQuantities[item.productId] || 0,
+            quantity: adjustedQuantities[item.productId] || 0,
             unitPrice: 0 // Default unitPrice
           })).filter(item => item.quantity > 0) // Only send items that were actually received
         };
@@ -200,12 +257,14 @@ export default function TransfersPage() {
     return selectedTransfer.fromBranchId === user?.branchId || selectedTransfer.toBranchId === user?.branchId;
   };
 
-  const updateReceivedQuantity = (productId: string, qty: number) => {
-    setReceivedQuantities(prev => ({
+  const updateAdjustedQuantity = (productId: string, qty: number) => {
+    setAdjustedQuantities(prev => ({
       ...prev,
       [productId]: Math.max(0, qty)
     }));
   };
+
+  const filteredTransfers = transfers.filter(trf => statusFilter === "ALL" || trf.status === statusFilter);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -248,6 +307,21 @@ export default function TransfersPage() {
       )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">Filter by Status</h2>
+          <select 
+            className="h-9 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="REQUESTED">Requested</option>
+            <option value="IN_TRANSIT">In Transit</option>
+            <option value="COMPLETED">Completed</option>
+            <option value="CANCELLED">Cancelled</option>
+          </select>
+        </div>
         {isLoading ? (
           <div className="p-8 text-center text-gray-500">Loading transfers...</div>
         ) : (
@@ -263,7 +337,7 @@ export default function TransfersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {transfers.map((trf) => (
+              {filteredTransfers.map((trf) => (
                 <TableRow 
                   key={trf.id}
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
@@ -283,7 +357,7 @@ export default function TransfersPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {transfers.length === 0 && (
+              {filteredTransfers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-gray-500">
                     No transfers found.
@@ -329,8 +403,11 @@ export default function TransfersPage() {
                     <TableRow>
                       <TableHead>Product</TableHead>
                       <TableHead className="text-right">Shipped Qty</TableHead>
-                      {selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId && (
-                        <TableHead className="text-right">Actual Received</TableHead>
+                      {((selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId) ||
+                       (selectedTransfer.status !== "IN_TRANSIT" && selectedTransfer.status !== "COMPLETED" && selectedTransfer.status !== "CANCELLED" && selectedTransfer.fromBranchId === user?.branchId)) && (
+                        <TableHead className="text-right">
+                          {selectedTransfer.status === "IN_TRANSIT" ? "Actual Received" : "Actual Shipped"}
+                        </TableHead>
                       )}
                     </TableRow>
                   </TableHeader>
@@ -342,15 +419,16 @@ export default function TransfersPage() {
                           <p className="text-xs text-gray-500">{item.productSku}</p>
                         </TableCell>
                         <TableCell className="text-right font-medium">{item.quantity}</TableCell>
-                        {selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId && (
+                        {((selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId) ||
+                         (selectedTransfer.status !== "IN_TRANSIT" && selectedTransfer.status !== "COMPLETED" && selectedTransfer.status !== "CANCELLED" && selectedTransfer.fromBranchId === user?.branchId)) && (
                           <TableCell className="text-right">
                             <Input 
                               type="number"
                               className="w-20 ml-auto text-right h-8"
                               min={0}
                               max={item.quantity}
-                              value={receivedQuantities[item.productId] ?? item.quantity}
-                              onChange={(e) => updateReceivedQuantity(item.productId, parseInt(e.target.value) || 0)}
+                              value={adjustedQuantities[item.productId] ?? item.quantity}
+                              onChange={(e) => updateAdjustedQuantity(item.productId, parseInt(e.target.value) || 0)}
                             />
                           </TableCell>
                         )}
@@ -383,7 +461,7 @@ export default function TransfersPage() {
                      selectedTransfer.status !== "CANCELLED" && (
                       <Button 
                         variant="default"
-                        onClick={() => handleAction("approve")}
+                        onClick={handleApprove}
                         disabled={isProcessing}
                       >
                         Approve & Ship

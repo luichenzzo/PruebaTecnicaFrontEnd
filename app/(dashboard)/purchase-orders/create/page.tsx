@@ -324,7 +324,8 @@ export default function CreatePurchaseOrderPage() {
                         step="0.01"
                         value={item.unitPrice}
                         onChange={(e) => updateUnitPrice(item.product.id, parseFloat(e.target.value) || 0)}
-                        className="h-8 w-24 ml-auto text-right"
+                        className="h-8 w-24 ml-auto text-right disabled:opacity-50 disabled:cursor-not-allowed bg-gray-50"
+                        disabled
                       />
                     </TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(item.quantity * item.unitPrice)}</TableCell>

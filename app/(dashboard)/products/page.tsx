@@ -11,14 +11,28 @@ import { Plus, Search, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { formatCurrency } from "@/lib/utils";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { Modal } from "@/components/ui/Modal";
+import { Supplier } from "@/types";
 
 export default function ProductsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [refresh, setRefresh] = useState(0);
+
+  // Modal states
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [productForm, setProductForm] = useState({
+    sku: "",
+    name: "",
+    description: "",
+    defaultCost: 0,
+    supplierId: ""
+  });
 
   useWebSocket("/topic/products", () => {
     toast({ type: "success", title: "Real-time update received!", message: "Products have been refreshed." });
@@ -26,19 +40,23 @@ export default function ProductsPage() {
   });
 
   useEffect(() => {
-    const fetchProducts = async () => {
+    const fetchProductsAndSuppliers = async () => {
       try {
-        const data = await apiClient<Product[]>("/api/products");
-        setProducts(data);
+        const [productsData, suppliersData] = await Promise.all([
+          apiClient<Product[]>("/api/products"),
+          apiClient<Supplier[]>("/api/suppliers")
+        ]);
+        setProducts(productsData);
+        setSuppliers(suppliersData);
       } catch (error) {
-        toast({ type: "error", title: "Failed to load products" });
+        toast({ type: "error", title: "Failed to load data" });
       } finally {
         setIsLoading(false);
       }
     };
 
     if (user?.role === "ADMIN") {
-      fetchProducts();
+      fetchProductsAndSuppliers();
     } else {
       setIsLoading(false);
     }
@@ -49,10 +67,35 @@ export default function ProductsPage() {
     
     try {
       await apiClient(`/api/products/${id}`, { method: "DELETE" });
-      setProducts(products.filter(p => p.id !== id));
       toast({ type: "success", title: "Product deleted" });
+      // The websocket update will refetch the list
     } catch (error) {
       toast({ type: "error", title: "Failed to delete product" });
+    }
+  };
+
+  const handleCreateProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing(true);
+    
+    try {
+      const payload = {
+        ...productForm,
+        supplierId: productForm.supplierId || null
+      };
+
+      await apiClient("/api/products", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+      
+      toast({ type: "success", title: "Product created successfully" });
+      setIsCreateModalOpen(false);
+      setProductForm({ sku: "", name: "", description: "", defaultCost: 0, supplierId: "" });
+    } catch (error: any) {
+      toast({ type: "error", title: "Failed to create product", message: error.message });
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -72,7 +115,7 @@ export default function ProductsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Products</h1>
           <p className="text-sm text-gray-500 mt-1">Manage your product catalog.</p>
         </div>
-        <Button className="gap-2">
+        <Button className="gap-2" onClick={() => setIsCreateModalOpen(true)}>
           <Plus size={16} />
           Add Product
         </Button>
@@ -134,6 +177,78 @@ export default function ProductsPage() {
           </Table>
         )}
       </div>
+
+      <Modal 
+        isOpen={isCreateModalOpen} 
+        onClose={() => !isProcessing && setIsCreateModalOpen(false)} 
+        title="Create New Product"
+      >
+        <form onSubmit={handleCreateProduct} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+            <Input 
+              required 
+              value={productForm.sku} 
+              onChange={e => setProductForm({...productForm, sku: e.target.value})} 
+              placeholder="e.g. PRD-001" 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <Input 
+              required 
+              value={productForm.name} 
+              onChange={e => setProductForm({...productForm, name: e.target.value})} 
+              placeholder="Product Name" 
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              className="flex w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              rows={3}
+              value={productForm.description}
+              onChange={e => setProductForm({...productForm, description: e.target.value})}
+              placeholder="Detailed description..."
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Cost</label>
+              <Input 
+                type="number" 
+                min="0" 
+                step="0.01" 
+                required 
+                value={productForm.defaultCost} 
+                onChange={e => setProductForm({...productForm, defaultCost: parseFloat(e.target.value) || 0})} 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (Optional)</label>
+              <select 
+                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                value={productForm.supplierId}
+                onChange={(e) => setProductForm({...productForm, supplierId: e.target.value})}
+              >
+                <option value="">No Supplier</option>
+                {suppliers.map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex justify-end pt-4 gap-2 border-t">
+            <Button type="button" variant="outline" onClick={() => setIsCreateModalOpen(false)} disabled={isProcessing}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isProcessing}>
+              {isProcessing ? "Creating..." : "Create Product"}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
     </div>
   );
 }

@@ -60,8 +60,12 @@ export default function BranchManagementPage() {
         setUsers(usersData);
         setBranches(branchesData);
       } else if (user?.role === "MANAGER") {
-        const usersData = await apiClient<User[]>("/api/auth/users");
+        const [usersData, branchesData] = await Promise.all([
+          apiClient<User[]>("/api/auth/users"),
+          apiClient<Branch[]>("/api/branches")
+        ]);
         setUsers(usersData);
+        setBranches(branchesData);
       }
     } catch (error) {
       toast({ type: "error", title: "Failed to load management data" });
@@ -293,14 +297,19 @@ export default function BranchManagementPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Branch ID </label>
-              <Input 
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+              <select 
+                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                 value={user?.role === "MANAGER" ? (user.branchId || "") : userForm.branchId} 
                 onChange={e => setUserForm({...userForm, branchId: e.target.value})} 
-                placeholder="UUID..." 
                 disabled={user?.role === "MANAGER"}
                 title={user?.role === "MANAGER" ? "Managers are locked to their own branch" : ""}
-              />
+              >
+                <option value="">Global (No Branch)</option>
+                {branches.map(b => (
+                  <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="flex justify-end pt-4 gap-2 border-t">

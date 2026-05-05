@@ -20,6 +20,7 @@ export default function PurchaseOrdersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [refresh, setRefresh] = useState(0);
 
   useWebSocket("/topic/purchase-orders", () => {
@@ -113,6 +114,8 @@ export default function PurchaseOrdersPage() {
     return <div className="text-red-500">Access Denied.</div>;
   }
 
+  const filteredOrders = orders.filter(po => statusFilter === "ALL" || po.status === statusFilter);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex justify-between items-center">
@@ -127,6 +130,19 @@ export default function PurchaseOrdersPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+          <h2 className="text-sm font-semibold text-gray-700">Filter by Status</h2>
+          <select 
+            className="h-9 rounded-md border border-gray-300 bg-white px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="ALL">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="RECEIVED">Received</option>
+            <option value="CANCELED">Canceled</option>
+          </select>
+        </div>
         {isLoading ? (
           <div className="p-8 text-center text-gray-500">Loading purchase orders...</div>
         ) : (
@@ -141,7 +157,7 @@ export default function PurchaseOrdersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.map((po) => (
+              {filteredOrders.map((po) => (
                 <TableRow 
                   key={po.id}
                   className="cursor-pointer hover:bg-gray-50 transition-colors"
@@ -163,7 +179,7 @@ export default function PurchaseOrdersPage() {
                   </TableCell>
                 </TableRow>
               ))}
-              {orders.length === 0 && (
+              {filteredOrders.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-gray-500">
                     No purchase orders found.
