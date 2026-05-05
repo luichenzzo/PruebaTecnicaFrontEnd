@@ -28,12 +28,12 @@ export default function CreateSalePage() {
 
   const [availableProducts, setAvailableProducts] = useState<{ product: Product; inventory: Inventory }[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  
+
   const [cart, setCart] = useState<CartItem[]>([]);
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [branchId, setBranchId] = useState<string>("");
   const [discountPercentage, setDiscountPercentage] = useState<number>(0);
@@ -60,7 +60,7 @@ export default function CreateSalePage() {
   useEffect(() => {
     const fetchCatalog = async () => {
       if (!branchId && user?.role !== 'ADMIN' && user?.role !== 'MANAGER') return;
-      
+
       setIsLoading(true);
       try {
         let inventoryUrl = "/api/inventory";
@@ -69,7 +69,7 @@ export default function CreateSalePage() {
         } else if (branchId) {
           inventoryUrl = `/api/inventory?branchId=${branchId}`;
         }
-        
+
         const [invData, productsData] = await Promise.allSettled([
           apiClient<Inventory[]>(inventoryUrl),
           apiClient<Product[]>("/api/products")
@@ -103,7 +103,7 @@ export default function CreateSalePage() {
         }).filter(item => item.inventory.quantity > 0); // Only show products with stock
 
         setAvailableProducts(catalog);
-        
+
         // Auto-set branchId for admin/manager if they didn't have one, based on available inventory
         if (!branchId && inventory.length > 0) {
           setBranchId(inventory[0].branchId);
@@ -111,17 +111,17 @@ export default function CreateSalePage() {
 
         // Sync cart with updated inventory
         setCart(prev => {
-           return prev.filter(item => {
-               const foundInv = inventory.find(i => i.productId === item.product.id);
-               return foundInv && foundInv.quantity > 0;
-           }).map(item => {
-               const foundInv = inventory.find(i => i.productId === item.product.id)!;
-               return {
-                   ...item,
-                   inventory: foundInv,
-                   quantity: Math.min(item.quantity, foundInv.quantity)
-               };
-           });
+          return prev.filter(item => {
+            const foundInv = inventory.find(i => i.productId === item.product.id);
+            return foundInv && foundInv.quantity > 0;
+          }).map(item => {
+            const foundInv = inventory.find(i => i.productId === item.product.id)!;
+            return {
+              ...item,
+              inventory: foundInv,
+              quantity: Math.min(item.quantity, foundInv.quantity)
+            };
+          });
         });
       } catch (error) {
         toast({ type: "error", title: "Failed to load product catalog" });
@@ -141,13 +141,13 @@ export default function CreateSalePage() {
           toast({ type: "error", title: "Insufficient stock", message: `Only ${catalogItem.inventory.quantity} available.` });
           return prev;
         }
-        return prev.map(item => 
-          item.product.id === catalogItem.product.id 
+        return prev.map(item =>
+          item.product.id === catalogItem.product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      
+
       if (catalogItem.inventory.quantity < 1) {
         toast({ type: "error", title: "Out of stock" });
         return prev;
@@ -195,7 +195,7 @@ export default function CreateSalePage() {
   // Validate cart before opening modal
   const handleReviewSale = () => {
     if (cart.length === 0) {
-      toast({ type: "warning", title: "Cart is empty" });
+      toast({ type: "error", title: "Cart is empty" });
       return;
     }
 
@@ -222,7 +222,7 @@ export default function CreateSalePage() {
       const sales = await apiClient<Sale[]>("/api/sales");
       let maxNum = 0;
       let count = 0;
-      
+
       sales.forEach(s => {
         count++;
         const parts = s.saleNumber.split('-');
@@ -247,7 +247,7 @@ export default function CreateSalePage() {
   // Final submission logic
   const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
-    
+
     try {
       // Step 1: Re-validate stock explicitly against the backend to prevent race conditions
       for (const item of cart) {
@@ -263,7 +263,7 @@ export default function CreateSalePage() {
       // Step 3: Build payload
       // Apply the global discount percentage evenly to each item's unitPrice
       const discountMultiplier = 1 - ((discountPercentage || 0) / 100);
-      
+
       const payload: CreateSaleRequest = {
         saleNumber,
         branchId,
@@ -284,15 +284,15 @@ export default function CreateSalePage() {
       setShowConfirmModal(false);
       setCart([]);
       setDiscountPercentage(0);
-      
+
       // Optional: Redirect to sales list
       router.push("/sales");
 
     } catch (error: any) {
-      toast({ 
-        type: "error", 
-        title: "Sale failed", 
-        message: error.message || "An error occurred during final validation." 
+      toast({
+        type: "error",
+        title: "Sale failed",
+        message: error.message || "An error occurred during final validation."
       });
       setShowConfirmModal(false);
     } finally {
@@ -300,8 +300,8 @@ export default function CreateSalePage() {
     }
   };
 
-  const filteredCatalog = availableProducts.filter(item => 
-    item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredCatalog = availableProducts.filter(item =>
+    item.product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.product.sku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -318,15 +318,15 @@ export default function CreateSalePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+
         {/* Left Column: Product Selection */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold mb-4">Add Products</h2>
             <div className="relative mb-4">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <Input 
-                placeholder="Search products to add..." 
+              <Input
+                placeholder="Search products to add..."
                 className="pl-10"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -346,8 +346,8 @@ export default function CreateSalePage() {
                         <span className="text-blue-600 font-semibold">{formatCurrency(product.defaultCost)}</span>
                       </div>
                     </div>
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       variant="secondary"
                       onClick={() => addToCart({ product, inventory })}
                       disabled={inventory.quantity < 1}
@@ -394,9 +394,9 @@ export default function CreateSalePage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Input 
-                          type="number" 
-                          min={1} 
+                        <Input
+                          type="number"
+                          min={1}
                           max={item.inventory.quantity}
                           value={item.quantity}
                           onChange={(e) => updateQuantity(item.product.id, parseInt(e.target.value) || 1)}
@@ -429,20 +429,20 @@ export default function CreateSalePage() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 sticky top-6">
             <h2 className="text-lg font-semibold mb-6">Order Summary</h2>
-            
+
             <div className="space-y-3 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
                 <span>{formatCurrency(subtotal)}</span>
               </div>
-              
+
               {(user?.role === "ADMIN" || user?.role === "MANAGER") && (
                 <div className="flex justify-between items-center text-gray-600 pt-2">
                   <span>Discount (%)</span>
-                  <Input 
-                    type="number" 
-                    min={0} 
-                    max={100} 
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
                     className="h-8 w-20 text-right"
                     value={discountPercentage}
                     onChange={(e) => setDiscountPercentage(parseFloat(e.target.value) || 0)}
@@ -454,15 +454,15 @@ export default function CreateSalePage() {
                 <span>Discount Amount</span>
                 <span className="text-red-500">-{formatCurrency(discountAmount)}</span>
               </div>
-              
+
               <div className="border-t border-gray-200 pt-3 flex justify-between font-bold text-lg text-gray-900">
                 <span>Total</span>
                 <span>{formatCurrency(total)}</span>
               </div>
             </div>
 
-            <Button 
-              className="w-full mt-8" 
+            <Button
+              className="w-full mt-8"
               size="lg"
               onClick={handleReviewSale}
               disabled={cart.length === 0 || cart.some(i => i.quantity > i.inventory.quantity) || discountPercentage < 0 || discountPercentage > 100}
@@ -474,8 +474,8 @@ export default function CreateSalePage() {
       </div>
 
       {/* Confirmation Modal */}
-      <Modal 
-        isOpen={showConfirmModal} 
+      <Modal
+        isOpen={showConfirmModal}
         onClose={() => !isSubmitting && setShowConfirmModal(false)}
         title="Confirm Sale"
       >
@@ -483,7 +483,7 @@ export default function CreateSalePage() {
           <p className="text-sm text-gray-600">
             Please confirm the details of this sale before final submission. This will deduct inventory from branch <span className="font-mono bg-gray-100 px-1">{branchId}</span>.
           </p>
-          
+
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
             <div className="space-y-2 mb-4">
               {cart.map(item => {
@@ -503,14 +503,14 @@ export default function CreateSalePage() {
                 );
               })}
             </div>
-            
+
             {discountPercentage > 0 && (
               <div className="border-t border-gray-200 pt-2 flex justify-between text-sm text-gray-600">
                 <span>Discount Applied</span>
                 <span className="text-red-500">{discountPercentage}%</span>
               </div>
             )}
-            
+
             <div className="border-t border-gray-200 pt-2 flex justify-between font-bold text-gray-900">
               <span>Total Amount</span>
               <span>{formatCurrency(total)}</span>

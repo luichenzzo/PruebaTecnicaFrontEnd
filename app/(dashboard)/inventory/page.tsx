@@ -19,6 +19,31 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [refresh, setRefresh] = useState(0);
+  
+  // Custom thresholds mapping: inventoryId -> threshold value
+  const [thresholds, setThresholds] = useState<Record<string, number>>({});
+
+  // Load thresholds from localStorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("optiplant-low-stock-thresholds");
+      if (saved) {
+        try {
+          setThresholds(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to parse thresholds", e);
+        }
+      }
+    }
+  }, []);
+
+  const updateThreshold = (inventoryId: string, value: number) => {
+    const newThresholds = { ...thresholds, [inventoryId]: Math.max(0, value) };
+    setThresholds(newThresholds);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("optiplant-low-stock-thresholds", JSON.stringify(newThresholds));
+    }
+  };
 
   // Listen to real-time updates from WebSocket
   useWebSocket("/topic/inventory", () => {
@@ -111,7 +136,9 @@ export default function InventoryPage() {
                 <TableHead>Branch Code</TableHead>
                 <TableHead className="text-right">Cost</TableHead>
                 <TableHead className="text-right">Quantity</TableHead>
-                <TableHead className="text-right">Reserved</TableHead>
+                {user?.role === "MANAGER" && (
+                  <TableHead className="text-right">Low Stock At</TableHead>
+                )}
                 <TableHead className="text-right">Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -129,11 +156,21 @@ export default function InventoryPage() {
                         : "-"}
                   </TableCell>
                   <TableCell className="text-right font-medium text-gray-900">{item.quantity}</TableCell>
-                  <TableCell className="text-right text-gray-500">{item.reserved}</TableCell>
+                  {user?.role === "MANAGER" && (
+                    <TableCell className="text-right">
+                      <Input 
+                        type="number"
+                        className="w-20 ml-auto h-8 text-right"
+                        min={0}
+                        value={thresholds[item.id] !== undefined ? thresholds[item.id] : 10}
+                        onChange={(e) => updateThreshold(item.id, parseInt(e.target.value) || 0)}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="text-right">
-                    {item.quantity < 10 ? (
+                    {item.quantity <= (thresholds[item.id] !== undefined ? thresholds[item.id] : 10) ? (
                       <Badge variant="destructive">Low Stock</Badge>
-                    ) : item.quantity < 50 ? (
+                    ) : item.quantity <= (thresholds[item.id] !== undefined ? thresholds[item.id] * 2 : 50) ? (
                       <Badge variant="warning">Moderate</Badge>
                     ) : (
                       <Badge variant="success">Healthy</Badge>
@@ -143,7 +180,7 @@ export default function InventoryPage() {
               ))}
               {filteredInventory.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                  <TableCell colSpan={user?.role === "MANAGER" ? 7 : 6} className="text-center py-8 text-gray-500">
                     No inventory records found.
                   </TableCell>
                 </TableRow>
