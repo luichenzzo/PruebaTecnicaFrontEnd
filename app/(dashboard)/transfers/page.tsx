@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Transfer, Branch } from "@/types";
+import { Transfer, Branch, CreateTransferRequest } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -11,13 +11,12 @@ import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { Modal } from "@/components/ui/Modal";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import { Input } from "@/components/ui/Input";
 
 export default function TransfersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   
-  // Tab states for Manager: "incoming" | "outgoing"
-  // For admin, we default to "all"
   const [activeTab, setActiveTab] = useState<"incoming" | "outgoing" | "all">(user?.role === "ADMIN" ? "all" : "incoming");
   
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -25,6 +24,20 @@ export default function TransfersPage() {
   
   const [selectedTransfer, setSelectedTransfer] = useState<Transfer | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // State to track modified received quantities
+  const [receivedQuantities, setReceivedQuantities] = useState<Record<string, number>>({});
+
+  // Reset quantities when a transfer is selected
+  useEffect(() => {
+    if (selectedTransfer) {
+      const initialQuantities: Record<string, number> = {};
+      selectedTransfer.items.forEach(item => {
+        initialQuantities[item.productId] = item.quantity;
+      });
+      setReceivedQuantities(initialQuantities);
+    }
+  }, [selectedTransfer]);
 
   const fetchTransfers = async () => {
     if (!user) return;
@@ -34,7 +47,6 @@ export default function TransfersPage() {
       if (user.role === "ADMIN") {
         transfersPromise = apiClient<Transfer[]>("/api/transfers");
       } else {
-        // Manager logic
         if (activeTab === "incoming") {
           transfersPromise = apiClient<Transfer[]>(`/api/transfers/to/${user.branchId}`);
         } else {
@@ -54,7 +66,6 @@ export default function TransfersPage() {
       const transfersResult = transfersData.value || [];
       const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
 
-      // Map branch codes into transfers data
       const mappedTransfers = transfersResult.map(transfer => {
         const fromBranch = branches.find(b => b.id === transfer.fromBranchId);
         const toBranch = branches.find(b => b.id === transfer.toBranchId);
@@ -81,7 +92,6 @@ export default function TransfersPage() {
     }
   }, [user, activeTab, toast]);
 
-  // Listen to real-time updates from WebSocket
   useWebSocket("/topic/transfers", () => {
     console.log("[Transfers] Received update, refetching...");
     toast({ type: "success", title: "Real-time update received!", message: "Transfers list has been refreshed." });
@@ -90,7 +100,7 @@ export default function TransfersPage() {
     }
   });
 
-  const handleAction = async (action: "approve" | "complete") => {
+  const handleAction = async (action: "approve" | "cancel") => {
     if (!selectedTransfer) return;
     
     setIsProcessing(true);
@@ -101,13 +111,68 @@ export default function TransfersPage() {
       
       toast({ 
         type: "success", 
-        title: `Transfer ${action === 'approve' ? 'approved (in transit)' : 'completed'} successfully!` 
+        title: `Transfer ${action === 'approve' ? 'approved (in transit)' : 'cancelled'} successfully!` 
       });
       
       setSelectedTransfer(null);
       await fetchTransfers();
     } catch (error: any) {
       toast({ type: "error", title: `Failed to ${action} transfer`, message: error.message });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleReceive = async () => {
+    if (!selectedTransfer) return;
+    setIsProcessing(true);
+
+    try {
+      // Check if any received quantity is less than original
+      const isPartial = selectedTransfer.items.some(
+        item => receivedQuantities[item.productId] < item.quantity
+      );
+
+      if (!isPartial) {
+        // Full receive
+        await apiClient(`/api/transfers/${selectedTransfer.id}/complete`, {
+          method: "POST"
+        });
+        toast({ type: "success", title: "Transfer completed successfully!" });
+      } else {
+        // Partial receive workaround
+        // 1. Cancel the original transfer to restore stock to origin branch
+        await apiClient(`/api/transfers/${selectedTransfer.id}/cancel`, {
+          method: "POST"
+        });
+
+        // 2. Create a new completed transfer with adjusted quantities
+        const payload: CreateTransferRequest = {
+          transferNumber: `${selectedTransfer.transferNumber}-ADJ`,
+          fromBranchId: selectedTransfer.fromBranchId,
+          toBranchId: selectedTransfer.toBranchId,
+          items: selectedTransfer.items.map(item => ({
+            productId: item.productId,
+            quantity: receivedQuantities[item.productId] || 0,
+            unitPrice: 0 // Default unitPrice
+          })).filter(item => item.quantity > 0) // Only send items that were actually received
+        };
+
+        if (payload.items.length > 0) {
+          await apiClient("/api/transfers/complete", {
+            method: "POST",
+            body: JSON.stringify(payload)
+          });
+          toast({ type: "success", title: "Partial transfer recorded successfully!" });
+        } else {
+          toast({ type: "success", title: "Transfer cancelled. No items were received." });
+        }
+      }
+
+      setSelectedTransfer(null);
+      await fetchTransfers();
+    } catch (error: any) {
+      toast({ type: "error", title: "Failed to receive transfer", message: error.message });
     } finally {
       setIsProcessing(false);
     }
@@ -121,8 +186,22 @@ export default function TransfersPage() {
     switch (status) {
       case "COMPLETED": return "success";
       case "IN_TRANSIT": return "warning";
+      case "CANCELLED": return "destructive";
       default: return "default"; // PENDING or REQUESTED
     }
+  };
+
+  const canCancel = (selectedTransfer: Transfer) => {
+    if (selectedTransfer.status === "COMPLETED" || selectedTransfer.status === "CANCELLED") return false;
+    // Both origin and destination managers can cancel before it's received
+    return selectedTransfer.fromBranchId === user?.branchId || selectedTransfer.toBranchId === user?.branchId;
+  };
+
+  const updateReceivedQuantity = (productId: string, qty: number) => {
+    setReceivedQuantities(prev => ({
+      ...prev,
+      [productId]: Math.max(0, qty)
+    }));
   };
 
   return (
@@ -246,7 +325,10 @@ export default function TransfersPage() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Product</TableHead>
-                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Shipped Qty</TableHead>
+                      {selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId && (
+                        <TableHead className="text-right">Actual Received</TableHead>
+                      )}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -257,6 +339,18 @@ export default function TransfersPage() {
                           <p className="text-xs text-gray-500">{item.productSku}</p>
                         </TableCell>
                         <TableCell className="text-right font-medium">{item.quantity}</TableCell>
+                        {selectedTransfer.status === "IN_TRANSIT" && selectedTransfer.toBranchId === user?.branchId && (
+                          <TableCell className="text-right">
+                            <Input 
+                              type="number"
+                              className="w-20 ml-auto text-right h-8"
+                              min={0}
+                              max={item.quantity}
+                              value={receivedQuantities[item.productId] ?? item.quantity}
+                              onChange={(e) => updateReceivedQuantity(item.productId, parseInt(e.target.value) || 0)}
+                            />
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -269,24 +363,38 @@ export default function TransfersPage() {
                 {/* Actions: Admins can't interact, Managers can based on branch logic */}
                 {user?.role === "MANAGER" && (
                   <div className="flex gap-2">
+                    {canCancel(selectedTransfer) && (
+                      <Button 
+                        variant="destructive"
+                        onClick={() => handleAction("cancel")}
+                        disabled={isProcessing}
+                      >
+                        Cancel / Deny
+                      </Button>
+                    )}
+                    
                     {/* Approve (Set In Transit) if user is origin branch manager */}
-                    {selectedTransfer.fromBranchId === user.branchId && selectedTransfer.status !== "IN_TRANSIT" && selectedTransfer.status !== "COMPLETED" && (
+                    {selectedTransfer.fromBranchId === user.branchId && 
+                     selectedTransfer.status !== "IN_TRANSIT" && 
+                     selectedTransfer.status !== "COMPLETED" && 
+                     selectedTransfer.status !== "CANCELLED" && (
                       <Button 
                         variant="default"
                         onClick={() => handleAction("approve")}
                         disabled={isProcessing}
                       >
-                        Approve & Ship (Set In Transit)
+                        Approve & Ship
                       </Button>
                     )}
+                    
                     {/* Complete (Receive) if user is destination branch manager */}
                     {selectedTransfer.toBranchId === user.branchId && selectedTransfer.status === "IN_TRANSIT" && (
                       <Button 
                         variant="default"
-                        onClick={() => handleAction("complete")}
+                        onClick={handleReceive}
                         disabled={isProcessing}
                       >
-                        Receive (Set Completed)
+                        Receive
                       </Button>
                     )}
                   </div>
