@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PurchaseOrder, Branch } from "@/types";
+import { PurchaseOrder, Branch, Supplier } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/Table";
@@ -15,17 +15,18 @@ import { Modal } from "@/components/ui/Modal";
 export default function PurchaseOrdersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [orders, setOrders] = useState<(PurchaseOrder & { branchCode?: string })[]>([]);
+  const [orders, setOrders] = useState<(PurchaseOrder & { branchCode?: string, supplierName?: string })[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const fetchOrders = async () => {
     try {
-      // Fetch purchase orders and branches concurrently
-      const [ordersData, branchesData] = await Promise.allSettled([
+      // Fetch purchase orders, branches, and suppliers concurrently
+      const [ordersData, branchesData, suppliersData] = await Promise.allSettled([
         apiClient<PurchaseOrder[]>("/api/purchase-orders"),
-        apiClient<Branch[]>("/api/branches")
+        apiClient<Branch[]>("/api/branches"),
+        apiClient<Supplier[]>("/api/suppliers")
       ]);
 
       if (ordersData.status === "rejected") {
@@ -34,13 +35,16 @@ export default function PurchaseOrdersPage() {
 
       const orders = ordersData.value;
       const branches = branchesData.status === "fulfilled" ? branchesData.value : [];
+      const suppliers = suppliersData.status === "fulfilled" ? suppliersData.value : [];
 
-      // Map branch code into orders data
+      // Map branch code and supplier name into orders data
       const mappedOrders = orders.map(order => {
         const branch = branches.find(b => b.id === order.branchId);
+        const supplier = suppliers.find(s => s.id === order.supplierId);
         return {
           ...order,
-          branchCode: branch?.code || order.branchId // Fallback to branchId if branch not found
+          branchCode: branch?.code || order.branchId, // Fallback to branchId if branch not found
+          supplierName: supplier?.name || order.supplierId
         };
       });
 
@@ -123,7 +127,7 @@ export default function PurchaseOrdersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>PO Number</TableHead>
-                <TableHead>Supplier ID</TableHead>
+                <TableHead>Supplier Name</TableHead>
                 <TableHead>Branch Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Total</TableHead>
@@ -137,7 +141,7 @@ export default function PurchaseOrdersPage() {
                   onClick={() => setSelectedOrder(po)}
                 >
                   <TableCell className="font-medium text-gray-900">{po.orderNumber}</TableCell>
-                  <TableCell className="text-gray-500 font-mono text-xs">{po.supplierId}</TableCell>
+                  <TableCell className="text-gray-900 font-medium text-xs">{po.supplierName}</TableCell>
                   <TableCell className="text-gray-500 font-mono text-xs">{po.branchCode}</TableCell>
                   <TableCell>
                     <Badge variant={
@@ -187,8 +191,8 @@ export default function PurchaseOrdersPage() {
                 <p className="font-mono mt-1">{selectedOrder.branchCode}</p>
               </div>
               <div>
-                <p className="text-gray-500">Supplier ID</p>
-                <p className="font-mono mt-1">{selectedOrder.supplierId}</p>
+                <p className="text-gray-500">Supplier Name</p>
+                <p className="font-medium mt-1">{(selectedOrder as any).supplierName || selectedOrder.supplierId}</p>
               </div>
             </div>
 

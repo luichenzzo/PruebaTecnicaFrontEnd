@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Product, PurchaseOrder, CreatePurchaseOrderRequest } from "@/types";
+import { Product, PurchaseOrder, CreatePurchaseOrderRequest, Branch, Supplier } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { useToast } from "@/components/ui/Toast";
@@ -26,6 +26,8 @@ export default function CreatePurchaseOrderPage() {
 
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   
   const [cart, setCart] = useState<POCartItem[]>([]);
   
@@ -48,27 +50,30 @@ export default function CreatePurchaseOrderPage() {
     }
   }, [user, router]);
 
-  // Fetch all products (global catalog) since PO brings net new stock
+  // Fetch products, branches, and suppliers
   useEffect(() => {
-    const fetchCatalog = async () => {
+    const fetchData = async () => {
       setIsLoading(true);
       try {
-        const products = await apiClient<Product[]>("/api/products");
-        setAvailableProducts(products);
+        const [products, fetchedBranches, fetchedSuppliers] = await Promise.all([
+          apiClient<Product[]>("/api/products"),
+          apiClient<Branch[]>("/api/branches"),
+          apiClient<Supplier[]>("/api/suppliers")
+        ]);
         
-        // Auto-set branchId for admin if not provided
-        if (!branchId && user?.role === 'ADMIN') {
-          // Use an arbitrary string or require manual input, let's leave it blank and require input
-        }
+        setAvailableProducts(products);
+        setBranches(fetchedBranches);
+        setSuppliers(fetchedSuppliers);
+        
       } catch (error) {
-        toast({ type: "error", title: "Failed to load products catalog" });
+        toast({ type: "error", title: "Failed to load necessary data" });
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchCatalog();
-  }, [branchId, user, toast]);
+    fetchData();
+  }, [toast]);
 
   const addToCart = (product: Product) => {
     setCart(prev => {
@@ -114,7 +119,7 @@ export default function CreatePurchaseOrderPage() {
 
   const handleReviewPO = () => {
     if (cart.length === 0) {
-      toast({ type: "warning", title: "Cart is empty" });
+      toast({ type: "error", title: "Cart is empty" });
       return;
     }
 
@@ -221,21 +226,31 @@ export default function CreatePurchaseOrderPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier ID</label>
-                <Input 
-                  placeholder="Enter Supplier UUID" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                   value={supplierId}
                   onChange={(e) => setSupplierId(e.target.value)}
-                />
+                >
+                  <option value="" disabled>Select a supplier</option>
+                  {suppliers.map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Destination Branch ID</label>
-                <Input 
-                  placeholder="Enter Branch UUID" 
+                <label className="block text-sm font-medium text-gray-700 mb-1">Destination Branch</label>
+                <select 
+                  className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
                   disabled={user?.role === "MANAGER"} // Managers are locked to their own branch
-                />
+                >
+                  <option value="" disabled>Select a branch</option>
+                  {branches.map(b => (
+                    <option key={b.id} value={b.id}>{b.code} - {b.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -362,7 +377,7 @@ export default function CreatePurchaseOrderPage() {
       >
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            You are about to issue a Purchase Order to supplier <span className="font-mono bg-gray-100 px-1">{supplierId}</span>. Stock will be routed to branch <span className="font-mono bg-gray-100 px-1">{branchId}</span>.
+            You are about to issue a Purchase Order to supplier <span className="font-medium bg-gray-100 px-1">{suppliers.find(s => s.id === supplierId)?.name || supplierId}</span>. Stock will be routed to branch <span className="font-medium bg-gray-100 px-1">{branches.find(b => b.id === branchId)?.code || branchId}</span>.
           </p>
           
           <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">

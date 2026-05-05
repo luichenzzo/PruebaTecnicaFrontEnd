@@ -277,17 +277,16 @@ export default function BranchManagementPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
               <select 
-                className="flex h-10 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
                 value={userForm.role}
                 onChange={e => setUserForm({...userForm, role: e.target.value as any})}
               >
                 <option value="OPERATOR">Operator</option>
-                <option value="MANAGER">Manager</option>
-                <option value="ADMIN">Admin</option>
+                {user?.role === "ADMIN" && <option value="MANAGER">Manager</option>}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Branch ID (Optional)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Branch ID </label>
               <Input 
                 value={user?.role === "MANAGER" ? (user.branchId || "") : userForm.branchId} 
                 onChange={e => setUserForm({...userForm, branchId: e.target.value})} 
