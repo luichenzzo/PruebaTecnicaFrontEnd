@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  optiplant-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: optiplant-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      # We fall back to the environment variables if .env doesn't exist, 
+      # explicitly exposing the backend URL for browser-side requests.
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
+    networks:
+      - optiplant-network
+    restart: unless-stopped
+
+networks:
+  optiplant-network:
+    external: true
+    # This matches the discovered Docker Compose network used by the backend.
+    name: pruebatecnicabackend_default

@@ -1,0 +1,7 @@
+node_modules
+.next
+.git
+.idea
+*.log
+.env.local
+.DS_Store
