@@ -31,7 +31,7 @@ export function Sidebar() {
   const { user } = useAuth();
 
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full hidden md:flex shrink-0">
+    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full hidden md:flex shrink-0 print:hidden">
       <div className="h-16 flex items-center px-6 border-b border-gray-200">
         <div className="flex items-center gap-2 text-blue-600 font-bold text-xl tracking-tight">
           <Boxes size={24} />

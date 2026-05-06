@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api/client";
 import { ReportsOverview, Inventory, Sale, Transfer, Branch } from "@/types";
 import { useAuth } from "@/lib/auth/AuthContext";
-import { Package, Boxes, ShoppingCart, Truck, ArrowRightLeft, History, AlertTriangle, TrendingUp, TrendingDown, Activity, BarChart3 } from "lucide-react";
+import { Package, Boxes, ShoppingCart, Truck, ArrowRightLeft, History, AlertTriangle, TrendingUp, TrendingDown, Activity, BarChart3, Printer } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
 // Helper components for Dashboard
@@ -170,12 +170,27 @@ export default function DashboardHome() {
   const maxBranchSales = branchPerformance.length > 0 ? Math.max(...branchPerformance.map(b => b.total)) : 0;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 animate-in fade-in duration-500 print:space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <h1 className="text-2xl font-bold text-gray-900">Dashboard Analytics</h1>
-        <span className="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded-full font-medium shadow-sm">
-          {user?.role} Profile
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm bg-blue-100 text-blue-700 px-3 py-1.5 rounded-full font-medium shadow-sm">
+            {user?.role} Profile
+          </span>
+          {user?.role === "ADMIN" && (
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 bg-gray-900 text-white px-4 py-1.5 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors shadow-sm"
+            >
+              <Printer size={16} />
+              Export as PDF
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="hidden print:block mb-6 border-b pb-4">
+        <h1 className="text-3xl font-bold text-gray-900">OptiPlant Dashboard Report</h1>
+        <p className="text-gray-500 mt-1">Generated on {new Date().toLocaleDateString()}</p>
       </div>
 
       {/* Top Stat Cards */}
