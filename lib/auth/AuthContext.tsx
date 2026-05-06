@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from "react";
 import { User, AuthResponse } from "@/types";
 import { apiClient } from "@/lib/api/client";
 import { useRouter, usePathname } from "next/navigation";
@@ -49,17 +49,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, [pathname, router]);
 
-  const login = (data: AuthResponse) => {
+  const login = useCallback((data: AuthResponse) => {
     localStorage.setItem("token", data.token);
     setUser(data.user);
     router.push("/");
-  };
+  }, [router]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem("token");
     setUser(null);
     router.push("/login");
-  };
+  }, [router]);
+
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+
+    const resetTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (user) {
+        timeoutId = setTimeout(() => {
+          logout();
+        }, 5 * 60 * 1000); // 5 minutes
+      }
+    };
+
+    const handleActivity = () => {
+      resetTimer();
+    };
+
+    if (user) {
+      resetTimer();
+      const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'];
+      events.forEach(event => {
+        window.addEventListener(event, handleActivity);
+      });
+
+      return () => {
+        if (timeoutId) clearTimeout(timeoutId);
+        events.forEach(event => {
+          window.removeEventListener(event, handleActivity);
+        });
+      };
+    }
+  }, [user, logout]);
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, logout }}>
