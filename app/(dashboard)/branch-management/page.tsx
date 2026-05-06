@@ -24,7 +24,7 @@ export default function BranchManagementPage() {
   const [refresh, setRefresh] = useState(0);
 
   useWebSocket("/topic/branches", () => {
-    toast({ type: "success", title: "Real-time update received!", message: "Branches have been refreshed." });
+
     setTimeout(() => setRefresh(prev => prev + 1), 800);
   });
 

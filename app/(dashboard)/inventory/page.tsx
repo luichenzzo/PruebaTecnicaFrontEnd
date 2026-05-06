@@ -10,7 +10,6 @@ import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { useToast } from "@/components/ui/Toast";
 import { useWebSocket } from "@/hooks/useWebSocket";
-
 export default function InventoryPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -19,7 +18,7 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [refresh, setRefresh] = useState(0);
-  
+
   // Custom thresholds mapping: inventoryId -> threshold value
   const [thresholds, setThresholds] = useState<Record<string, number>>({});
 
@@ -60,7 +59,7 @@ export default function InventoryPage() {
         if (user?.role !== "ADMIN" && user?.branchId) {
           url = `/api/inventory/branch/${user.branchId}`;
         }
-        
+
         // Fetch inventory, products, and branches concurrently
         const [invData, productsData, branchesData] = await Promise.allSettled([
           apiClient<Inventory[]>(`${url}?_t=${t}`),
@@ -100,8 +99,8 @@ export default function InventoryPage() {
     }
   }, [user, refresh, toast]);
 
-  const filteredInventory = inventory.filter(p => 
-    p.productName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+  const filteredInventory = inventory.filter(p =>
+    p.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.productSku.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -116,8 +115,8 @@ export default function InventoryPage() {
         <div className="p-4 border-b border-gray-200">
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <Input 
-              placeholder="Search by product name or SKU..." 
+            <Input
+              placeholder="Search by product name or SKU..."
               className="pl-10"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -149,8 +148,8 @@ export default function InventoryPage() {
                   <TableCell>{item.productName}</TableCell>
                   <TableCell className="text-gray-500 font-mono text-xs">{item.branchCode}</TableCell>
                   <TableCell className="text-right text-gray-600">
-                    {item.productDefaultCost !== undefined 
-                      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.productDefaultCost) 
+                    {item.productDefaultCost !== undefined
+                      ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.productDefaultCost)
                       : item.defaultCost !== undefined
                         ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(item.defaultCost)
                         : "-"}
@@ -158,7 +157,7 @@ export default function InventoryPage() {
                   <TableCell className="text-right font-medium text-gray-900">{item.quantity}</TableCell>
                   {user?.role === "MANAGER" && (
                     <TableCell className="text-right">
-                      <Input 
+                      <Input
                         type="number"
                         className="w-20 ml-auto h-8 text-right"
                         min={0}

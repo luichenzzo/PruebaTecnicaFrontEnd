@@ -96,7 +96,7 @@ export default function TransfersPage() {
 
   useWebSocket("/topic/transfers", () => {
     console.log("[Transfers] Received update, refetching...");
-    toast({ type: "success", title: "Real-time update received!", message: "Transfers list has been refreshed." });
+
     setTimeout(() => {
       if (user?.role === "ADMIN" || user?.role === "MANAGER") {
         fetchTransfers();

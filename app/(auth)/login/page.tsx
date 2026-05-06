@@ -29,10 +29,10 @@ export default function LoginPage() {
       toast({ type: "success", title: "Welcome back!" });
       login(data);
     } catch (error: any) {
-      toast({ 
-        type: "error", 
-        title: "Login failed", 
-        message: error.message || "Please check your credentials and try again." 
+      toast({
+        type: "error",
+        title: "Login failed",
+        message: error.message || "Please check your credentials and try again."
       });
     } finally {
       setIsLoading(false);
@@ -48,14 +48,7 @@ export default function LoginPage() {
         <h2 className="mt-2 text-center text-3xl font-extrabold text-gray-900">
           Sign in to your account
         </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Or{" "}
-          <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-            register a new account
-          </Link>
-        </p>
       </div>
-
       <div className="mt-8 bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10 border border-gray-100">
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div>

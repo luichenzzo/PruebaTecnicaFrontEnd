@@ -35,7 +35,7 @@ export default function ProductsPage() {
   });
 
   useWebSocket("/topic/products", () => {
-    toast({ type: "success", title: "Real-time update received!", message: "Products have been refreshed." });
+
     setTimeout(() => setRefresh(prev => prev + 1), 800);
   });
 

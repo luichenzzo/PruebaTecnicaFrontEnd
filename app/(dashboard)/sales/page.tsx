@@ -70,7 +70,7 @@ export default function SalesPage() {
 
   useWebSocket("/topic/sales", () => {
     console.log("[Sales] Received update, refetching...");
-    toast({ type: "success", title: "Real-time update received!", message: "Sales list has been refreshed." });
+
     setTimeout(() => {
       if (user) {
         fetchSales();

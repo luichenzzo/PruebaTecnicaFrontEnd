@@ -24,7 +24,7 @@ export default function PurchaseOrdersPage() {
   const [refresh, setRefresh] = useState(0);
 
   useWebSocket("/topic/purchase-orders", () => {
-    toast({ type: "success", title: "Real-time update received!", message: "Purchase orders have been refreshed." });
+
     setTimeout(() => setRefresh(prev => prev + 1), 800);
   });
 

@@ -19,7 +19,7 @@ export default function MovementsPage() {
   const [refresh, setRefresh] = useState(0);
 
   useWebSocket("/topic/inventory-movements", () => {
-    toast({ type: "success", title: "Real-time update received!", message: "Movements have been refreshed." });
+
     setTimeout(() => setRefresh(prev => prev + 1), 800);
   });
 
