@@ -1,36 +1,70 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Optiplant - Inventory Management System
 
-## Getting Started
+Optiplant is a comprehensive, role-based Inventory Management and Point-of-Sale (POS) system designed for multi-branch operations. This frontend application provides an intuitive interface for managing branches, tracking inventory, processing sales, and handling inter-branch transfers in real-time.
 
-First, run the development server:
+## 🚀 Key Features
 
+*   **Role-Based Access Control (RBAC):**
+    *   **ADMIN:** Full global access to manage branches, users, and the product catalog, as well as accessing global dashboard metrics and generating reports. Restricted from performing daily operations like sales.
+    *   **MANAGER:** Branch-specific access to oversee local inventory, approve/deny incoming transfers, handle purchase orders, and monitor branch-level sales.
+    *   **OPERATOR:** Day-to-day access for ringing up sales, checking stock availability, and sending/receiving transfer shipments.
+*   **Real-Time Data Synchronization:** Utilizes WebSockets (STOMP/SockJS) for instant updates on inter-branch transfers and inventory changes without requiring manual page refreshes.
+*   **Comprehensive Modules:**
+    *   **Dashboard:** Visual metrics and downloadable PDF reports (for Admins).
+    *   **Inventory & Products:** Catalog management and branch-specific stock tracking with adjustment capabilities.
+    *   **Sales:** Streamlined POS interface for registering customer purchases.
+    *   **Transfers:** Send, receive (full or partial), and cancel inventory transfers between branches.
+    *   **Purchase Orders:** Track and receive supplier deliveries.
+*   **Security:** Features an automatic session logout mechanism after 5 minutes of inactivity.
+
+## 🛠️ Tech Stack
+
+*   **Framework:** [Next.js](https://nextjs.org/) (App Router)
+*   **UI Library:** React 19
+*   **Styling:** [Tailwind CSS v4](https://tailwindcss.com/)
+*   **Icons:** [Lucide React](https://lucide.dev/)
+*   **WebSockets:** `@stomp/stompjs` & `sockjs-client`
+*   **Containerization:** Docker & Docker Compose
+
+## ⚙️ Getting Started
+
+### Prerequisites
+Make sure you have Node.js (v20+) or Docker installed on your machine.
+
+### Environment Variables
+Copy the example environment file and configure it:
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
 ```
+Ensure that `NEXT_PUBLIC_API_URL` points to your running backend instance (e.g., `http://localhost:8080`).
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Running Locally (Development Mode)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Install dependencies:
+   ```bash
+   npm install
+   # or yarn install
+   # or pnpm install
+   ```
+2. Start the development server:
+   ```bash
+   npm run dev
+   ```
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Running with Docker
 
-## Learn More
+Optiplant is containerized and ready to be spun up alongside the backend using Docker Compose.
 
-To learn more about Next.js, take a look at the following resources:
+To run the frontend service:
+```bash
+docker-compose up -d --build
+```
+*Note: The `docker-compose.yml` is configured to connect to an external network (`pruebatecnicabackend_default`) to seamlessly integrate with the backend API.*
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📁 Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+*   `/app`: Contains the Next.js App Router structure, including `(auth)` for login pages and `(dashboard)` for the main application modules.
+*   `/lib`: Core utilities, including the AuthContext, API fetch wrappers, and WebSocket clients.
+*   `/.env.example`: Template for environment variables.
+*   `Dockerfile` & `docker-compose.yml`: Containerization configuration.
